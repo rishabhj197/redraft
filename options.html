@@ -1,0 +1,65 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Redraft Options</title>
+    <style>
+      body {
+        font-family: system-ui, sans-serif;
+        max-width: 420px;
+        margin: 40px auto;
+        padding: 0 16px;
+        color: #1a1a1a;
+      }
+      h1 {
+        font-size: 18px;
+        margin-bottom: 4px;
+      }
+      label {
+        display: block;
+        margin-top: 16px;
+        font-weight: 600;
+        font-size: 14px;
+      }
+      input,
+      select {
+        width: 100%;
+        margin-top: 6px;
+        padding: 8px;
+        font-size: 14px;
+        box-sizing: border-box;
+      }
+      button {
+        margin-top: 20px;
+        padding: 8px 16px;
+        font-size: 14px;
+        cursor: pointer;
+      }
+      #status {
+        margin-left: 12px;
+        font-size: 13px;
+        color: #2a7a2a;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Redraft</h1>
+
+    <label for="api-key">Anthropic API key</label>
+    <input id="api-key" type="password" autocomplete="off" placeholder="sk-ant-..." />
+
+    <label for="style">Style</label>
+    <select id="style">
+      <option value="plain">Plain</option>
+      <option value="classic">Classic</option>
+      <option value="warm">Warm</option>
+    </select>
+
+    <div>
+      <button id="save">Save</button>
+      <span id="status"></span>
+    </div>
+
+    <script src="options.js"></script>
+  </body>
+</html>

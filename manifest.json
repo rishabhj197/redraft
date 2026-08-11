@@ -1,0 +1,29 @@
+{
+  "manifest_version": 3,
+  "name": "Redraft",
+  "version": "0.1.0",
+  "description": "Rewrites your text in place, in whatever box you're already typing in.",
+  "permissions": ["storage"],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "options_ui": {
+    "page": "options.html",
+    "open_in_tab": true
+  },
+  "commands": {
+    "trigger-redraft": {
+      "suggested_key": {
+        "default": "Ctrl+Shift+K"
+      },
+      "description": "Rewrite the currently focused text field"
+    }
+  }
+}
