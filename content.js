@@ -19,7 +19,7 @@ function getFocusedText() {
   return null;
 }
 
-chrome.runtime.onMessage.addListener((message) => {
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message?.type !== "REDRAFT_CAPTURE") return;
 
   const text = getFocusedText();
@@ -28,8 +28,10 @@ chrome.runtime.onMessage.addListener((message) => {
     console.log(
       "Redraft: no textarea, text input, or contenteditable element is focused."
     );
+    sendResponse();
     return;
   }
 
   chrome.runtime.sendMessage({ type: "REDRAFT_TEXT", text });
+  sendResponse();
 });
