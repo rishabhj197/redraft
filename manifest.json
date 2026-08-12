@@ -4,6 +4,7 @@
   "version": "0.1.0",
   "description": "Rewrites your text in place, in whatever box you're already typing in.",
   "permissions": ["storage"],
+  "host_permissions": ["https://api.anthropic.com/*"],
   "background": {
     "service_worker": "background.js"
   },
