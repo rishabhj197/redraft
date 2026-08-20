@@ -13,6 +13,9 @@ const state = {
   host: null,
   root: null,
   onKeydown: null,
+  // Set when the writer dismisses the widget, so a result that lands after
+  // they have moved on does not reopen it.
+  dismissed: false,
 };
 
 // --- field capture -------------------------------------------------------
@@ -156,6 +159,7 @@ const STYLES = `
 `;
 
 function closeWidget() {
+  state.dismissed = true;
   if (state.onKeydown) {
     document.removeEventListener("keydown", state.onKeydown, true);
     state.onKeydown = null;
@@ -167,6 +171,7 @@ function closeWidget() {
 
 function openWidget() {
   closeWidget();
+  state.dismissed = false;
 
   const host = document.createElement("div");
   host.id = HOST_ID;
@@ -433,6 +438,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
 
   if (message?.type === "REDRAFT_RESULT") {
+    if (state.dismissed) {
+      sendResponse();
+      return;
+    }
     const { result } = message;
     state.original = message.original;
     state.meta = {
@@ -448,6 +457,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
 
   if (message?.type === "REDRAFT_ERROR") {
+    if (state.dismissed) {
+      sendResponse();
+      return;
+    }
     if (message.code === "budget_exceeded") {
       showMessage(message.message, {
         error: true,

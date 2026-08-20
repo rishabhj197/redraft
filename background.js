@@ -105,12 +105,12 @@ async function handleRedraftText(tabId, text) {
 
     sendToTab(tabId, { type: "REDRAFT_RESULT", original: text, result });
   } catch (error) {
-    if (error.budget) {
-      console.log(
-        `Redraft: budget — spent ${error.budget.spentFormatted}, ` +
-          `${error.budget.remainingFormatted} remaining.`
-      );
-    }
+    // Remaining budget is logged after every call, whatever the outcome.
+    const budget = error.budget ?? budgetSummary(await chromeBudgetStore.read());
+    console.log(
+      `Redraft: budget — spent ${budget.spentFormatted} of ` +
+        `${budget.limitUsd.toFixed(2)}, ${budget.remainingFormatted} remaining.`
+    );
 
     // The budget guard is terminal. Report and stop; never retry.
     console.log("Redraft: call failed.", {
@@ -122,7 +122,7 @@ async function handleRedraftText(tabId, text) {
       type: "REDRAFT_ERROR",
       code: error.code ?? "unknown",
       message: error.message,
-      budget: error.code === "budget_exceeded" ? budgetSummary(error.spentUsd) : null,
+      budget,
     });
   }
 }
