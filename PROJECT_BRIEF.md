@@ -15,6 +15,22 @@ That line is the product specification.
 
 A Chrome extension that improves your writing **in the box where you're already writing it** — Gmail, LinkedIn, Slack, GitHub, comment fields.
 
+## Two modes
+
+**Coach — the default.** Redraft tells you *what to change and why*. You make the edits yourself. Your text stays yours.
+
+**Rewrite — the option.** Redraft returns the rewritten line. Faster, useful for throwaway text.
+
+### Why Coach is the default
+
+Three reasons, in ascending order of importance:
+
+1. **No watermark.** Anthropic began watermarking generated text on 11 August 2026, per the EU AI Act Transparency Code. Text you write yourself carries none.
+2. **No LLM register.** The bigger problem, and unrelated to watermarking: models have a recognisable voice — favoured words, relentless tricolons, reflexive hedging. That's what makes prose read as machine-made, to humans and detectors alike. Suggestions don't carry it; rewrites do.
+3. **It's the actual goal.** You said you want to improve *the writer*, not the text. A tool that rewrites for you leaves you exactly as good a writer as you were. A tool that tells you what's weak and why makes you better each time.
+
+**Positioning consequence:** Grammarly rewrites. ChatGPT rewrites. A tool that *teaches* is a different category and a far more interesting case study.
+
 ## What it deliberately is not
 
 A page you paste text into. That is Claude with a system prompt, and it earns nothing. **The distribution is the product.**
@@ -69,6 +85,24 @@ That is your decoder. Any name the user types resolves into a position on those 
 A second useful frame is **register** — Martin Joos's *The Five Clocks* (1961): frozen, formal, consultative, casual, intimate. Orthogonal to style, and easy for users to grasp.
 
 **Why this matters for the case study:** "I built a style taxonomy grounded in Thomas & Turner and made it measurable" is a far stronger claim than "I wrote some prompts." Citing prior art signals you researched rather than improvised.
+
+### The vocabulary principle
+
+Orwell: *"Never use a long word where a short one will do."* The condition is load-bearing — when the longer word does something the shorter one can't, the rule is silent.
+
+Tharoor and Rushdie reach for the uncommon word only when it earns its place. That isn't a contradiction of Orwell; it's the same rule read properly.
+
+**The synthesis, which belongs in BASE:**
+
+> Prefer the precise word over both the simpler and the fancier one.
+
+Your own tagline already encodes it: *not very tired — **exhausted***. Longer, and chosen because it's more exact.
+
+**Never impose a quota.** "Include one heavier word per suggestion" would force ornamentation — the same vice in the opposite direction. Offer and justify instead:
+
+> Where a less common word would be genuinely more exact than the writer's choice, offer it as an optional upgrade with a one-line justification of what it captures that the original doesn't. If none applies, offer none.
+
+Measurable: track how often vocabulary suggestions are accepted versus ignored. A low rate means you're being ornamental, not precise.
 
 ### Is this overkill for v1?
 
@@ -132,21 +166,55 @@ The interesting finding is where the two disagree. *"My judge scored the new pro
 I argued against it for the tracker. That was 13 static rows in a file. This is different: **feedback events accumulate over time and need querying.** That is what a database is for. The instinct was correct.
 
 ```
-Chrome extension
-├── content script      watches text fields, detects trigger, renders suggestion
-├── service worker      calls the Anthropic API
-├── options page        your API key + style preference
+lib/                    PURE FUNCTIONS — no chrome.* calls, testable in Node
+├── prompts.js          BASE + STYLE + MODE assembly, PROMPT_VERSION
+├── request.js          builds the API request body and headers
+└── parse.js            parses and validates the JSON response
+
+tests/                  node --test, no dependencies, fetch mocked
+└── *.test.js
+
+Chrome extension        THIN — Chrome-specific plumbing only
+├── content script      detects trigger, captures text, renders the widget
+├── service worker      calls the API via lib/
+├── options page        API key · style · default mode
 ├── chrome.storage      key stored locally, never leaves your machine
 └── supabase-js         writes feedback events directly from the extension
 
 Supabase
-└── suggestions table   original · suggestion · style · outcome · reason · timestamp
+└── suggestions table   original · mode · style · suggestion · outcome · reason · prompt_version · timestamp
 
-Eval harness (same repo, separate folder)
+Eval harness            imports the SAME lib/ the extension uses
 ├── golden-set.json     50–100 real samples
 ├── run-evals.js        Node script → judge → scores
 └── results/            scored runs, committed as files
 ```
+
+### Why `lib/` exists
+
+Claude Code cannot drive Chrome — it can't reload the extension, focus a field, or read the service worker console. So any logic trapped inside browser-coupled code can only be verified by hand, by you, every time.
+
+Pulling the pure logic out means **Claude Code can test and iterate on most of the codebase autonomously**, and only the thin Chrome layer needs manual checking.
+
+It pays a second time at eval stage: `run-evals.js` must call the *exact* prompt-assembly code the extension uses, or you'd be measuring a different system than you ship.
+
+### The Coach response contract
+
+Coach mode returns **structured JSON, never prose**. Renderable by the widget, parseable by tests, scoreable by the eval harness.
+
+```json
+{
+  "noChangesNeeded": false,
+  "suggestions": [
+    { "excerpt": "...", "issue": "...", "fix": "...", "why": "..." }
+  ],
+  "vocabulary": [
+    { "from": "...", "to": "...", "why": "..." }
+  ]
+}
+```
+
+`noChangesNeeded: true` with empty arrays is a valid and *desirable* response. The model must be free to say the writing is already good.
 
 **Still no server.** The Supabase JS client talks to the database directly from the extension using an anon key plus row-level security. Your Anthropic key stays in `chrome.storage` because you are the only user.
 
@@ -166,6 +234,45 @@ Eval harness (same repo, separate folder)
 | **Running the evals** | Node, in the VS Code terminal | `node run-evals.js` → results to disk → committed. |
 | **The AI** | Anthropic API | Called from the extension. Pay-per-token, your key. |
 | **Publishing the story** | Vercel | The write-up, on the pipeline you already proved. |
+
+---
+
+# 4b · Model selection
+
+Two models are in play. They are unrelated, billed separately, and changed differently. Confusing them wastes money and produces uninterpretable results.
+
+| | Builds the extension | Powers the extension |
+|---|---|---|
+| **Which** | Claude Code | Redraft's API calls |
+| **Paid by** | Pro subscription | $10 API credits |
+| **Change with** | `/model` in the terminal | Options page dropdown |
+| **Default** | Sonnet 5 | Haiku 4.5 |
+
+### Changing Claude Code's model
+
+- **In session:** type `/model` and pick from the list
+- **At launch:** `claude --model opus`
+- **Permanently:** the `model` key in `~/.claude/settings.json`
+
+**When to reach for Opus 5:** architectural refactors, the Shadow DOM widget, and any bug that survives two attempts. It burns Pro quota faster, so it's a tool for hard problems rather than a default.
+
+**Sonnet 5 for everything else** — routine edits, tests, commits, documentation.
+
+### Changing Redraft's model
+
+Options page dropdown: Haiku 4.5 (`claude-haiku-4-5-20251001`) · Sonnet 5 (`claude-sonnet-5`) · Opus 5 (`claude-opus-5`). Default Haiku.
+
+**Never hardcode it.** It passes through `lib/request.js` as a parameter, because model choice is a variable you will deliberately vary during evals.
+
+**Haiku is the right default** for a writing tool — latency is a product feature, and it's cheap enough that cost never constrains you. Coach mode asks more of the model than Rewrite does (structured JSON plus genuine vocabulary judgment), so if suggestions feel thin, compare against Sonnet.
+
+**Settle that comparison with the eval harness, not by impression.** "Sonnet feels better" is exactly the kind of claim the harness exists to test — and "the expensive model wasn't measurably better" is a strong case-study finding if it turns out to be true.
+
+### The non-negotiable rule
+
+**Model and `PROMPT_VERSION` travel with every logged response, every feedback event, and every eval result.**
+
+Without them, a batch of good output tells you nothing about what produced it, and every comparison has to be re-run from scratch. These are the two variables you will change most often; both must be attributable.
 
 ---
 
@@ -213,6 +320,19 @@ Style selection now answers this: it moves text toward a chosen style. That's me
 
 **Which sites for v1?**
 `<textarea>` and `contenteditable`, tested on two or three sites. Gmail and LinkedIn are reasonable. **Avoid Google Docs** — it renders text to canvas, so extensions can't read it normally. Verify before promising it to yourself.
+
+---
+
+## Step zero
+
+```powershell
+mkdir C:\dev\redraft
+cd C:\dev\redraft
+git init
+claude
+```
+
+Then `/init`, and paste this brief in as the starting spec.
 
 ---
 
