@@ -1,0 +1,10 @@
+{
+  "name": "redraft",
+  "version": "0.2.0",
+  "private": true,
+  "description": "Redraft — improves your writing in the box where you're already writing it.",
+  "type": "module",
+  "scripts": {
+    "test": "node --test"
+  }
+}
