@@ -1,26 +1,121 @@
+import { DEFAULT_MODEL, MODELS } from "./lib/request.js";
+import { DEFAULT_MODE, DEFAULT_STYLE, MODES, STYLES } from "./lib/prompts.js";
+import { BUDGET_LIMIT_USD, budgetSummary, isOverBudget } from "./lib/budget.js";
+
+const SPEND_KEY = "budgetSpentUsd";
+
 const apiKeyInput = document.getElementById("api-key");
+const modeSelect = document.getElementById("mode");
+const modeHint = document.getElementById("mode-hint");
 const styleSelect = document.getElementById("style");
+const modelSelect = document.getElementById("model");
 const saveButton = document.getElementById("save");
 const status = document.getElementById("status");
+const budgetBlock = document.getElementById("budget");
+const budgetLine = document.getElementById("budget-line");
+const resetBudgetButton = document.getElementById("reset-budget");
+
+const MODE_LABELS = {
+  coach: "Coach — tell me what to change",
+  rewrite: "Rewrite — just fix it",
+};
+
+const MODE_HINTS = {
+  coach: "Redraft says what to change and why. You make the edit, so the words stay yours.",
+  rewrite: "Redraft returns the rewritten line. Faster, and useful for throwaway text.",
+};
+
+const STYLE_LABELS = {
+  plain: "Plain — Orwell's rules",
+  classic: "Classic — Thomas & Turner",
+  warm: "Warm — conversational",
+};
+
+function fill(select, values, labels) {
+  select.replaceChildren(
+    ...values.map((value) => {
+      const option = document.createElement("option");
+      option.value = value;
+      option.textContent = labels[value] ?? value;
+      return option;
+    })
+  );
+}
+
+fill(modeSelect, MODES, MODE_LABELS);
+fill(styleSelect, STYLES, STYLE_LABELS);
+modelSelect.replaceChildren(
+  ...MODELS.map(({ id, label }) => {
+    const option = document.createElement("option");
+    option.value = id;
+    option.textContent = label;
+    return option;
+  })
+);
+
+function updateModeHint() {
+  modeHint.textContent = MODE_HINTS[modeSelect.value] ?? "";
+}
+
+modeSelect.addEventListener("change", updateModeHint);
+
+function renderBudget(spentUsd) {
+  const summary = budgetSummary(spentUsd);
+  budgetLine.innerHTML = "";
+  budgetLine.append(
+    document.createTextNode("Spend so far: "),
+    Object.assign(document.createElement("strong"), {
+      textContent: summary.spentFormatted,
+    }),
+    document.createTextNode(
+      ` of a $${BUDGET_LIMIT_USD.toFixed(2)} cap. ` +
+        `${summary.remainingFormatted} remaining; calls stop at ` +
+        `$${summary.refusalThresholdUsd.toFixed(2)}.`
+    )
+  );
+  budgetBlock.classList.toggle("over", isOverBudget(spentUsd));
+}
+
+function flash(text) {
+  status.textContent = text;
+  setTimeout(() => {
+    status.textContent = "";
+  }, 2000);
+}
 
 function loadSaved() {
-  chrome.storage.local.get(["apiKey", "style"], (result) => {
-    if (result.apiKey) apiKeyInput.value = result.apiKey;
-    if (result.style) styleSelect.value = result.style;
-  });
+  chrome.storage.local.get(
+    ["apiKey", "style", "mode", "model", SPEND_KEY],
+    (stored) => {
+      if (stored.apiKey) apiKeyInput.value = stored.apiKey;
+      modeSelect.value = MODES.includes(stored.mode) ? stored.mode : DEFAULT_MODE;
+      styleSelect.value = STYLES.includes(stored.style) ? stored.style : DEFAULT_STYLE;
+      modelSelect.value = MODELS.some((m) => m.id === stored.model)
+        ? stored.model
+        : DEFAULT_MODEL;
+      updateModeHint();
+      renderBudget(typeof stored[SPEND_KEY] === "number" ? stored[SPEND_KEY] : 0);
+    }
+  );
 }
 
-function save() {
-  const apiKey = apiKeyInput.value.trim();
-  const style = styleSelect.value;
+saveButton.addEventListener("click", () => {
+  chrome.storage.local.set(
+    {
+      apiKey: apiKeyInput.value.trim(),
+      mode: modeSelect.value,
+      style: styleSelect.value,
+      model: modelSelect.value,
+    },
+    () => flash("Saved")
+  );
+});
 
-  chrome.storage.local.set({ apiKey, style }, () => {
-    status.textContent = "Saved";
-    setTimeout(() => {
-      status.textContent = "";
-    }, 2000);
+resetBudgetButton.addEventListener("click", () => {
+  chrome.storage.local.set({ [SPEND_KEY]: 0 }, () => {
+    renderBudget(0);
+    flash("Spend counter reset");
   });
-}
+});
 
-saveButton.addEventListener("click", save);
 loadSaved();

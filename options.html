@@ -1,65 +1,141 @@
 <!doctype html>
-<html>
+<html lang="en">
   <head>
     <meta charset="utf-8" />
     <title>Redraft Options</title>
     <style>
+      :root {
+        color-scheme: light;
+      }
       body {
-        font-family: system-ui, sans-serif;
-        max-width: 420px;
-        margin: 40px auto;
-        padding: 0 16px;
-        color: #1a1a1a;
+        font-family:
+          ui-sans-serif,
+          system-ui,
+          -apple-system,
+          "Segoe UI",
+          sans-serif;
+        max-width: 30rem;
+        margin: 3rem auto;
+        padding: 0 1.25rem 4rem;
+        color: #1c1a17;
+        line-height: 1.55;
       }
       h1 {
-        font-size: 18px;
-        margin-bottom: 4px;
+        font-size: 1.25rem;
+        margin: 0;
+        letter-spacing: -0.01em;
+      }
+      .tagline {
+        margin: 0.25rem 0 2rem;
+        color: #6b645c;
+        font-style: italic;
+        font-size: 0.875rem;
       }
       label {
         display: block;
-        margin-top: 16px;
+        margin-top: 1.5rem;
         font-weight: 600;
-        font-size: 14px;
+        font-size: 0.8125rem;
+        letter-spacing: 0.01em;
+      }
+      .hint {
+        margin: 0.25rem 0 0;
+        color: #6b645c;
+        font-size: 0.8125rem;
       }
       input,
       select {
         width: 100%;
-        margin-top: 6px;
-        padding: 8px;
-        font-size: 14px;
+        margin-top: 0.4rem;
+        padding: 0.5rem 0.6rem;
+        font: inherit;
+        font-size: 0.875rem;
+        color: inherit;
+        background: #fff;
+        border: 1px solid #d8d2c9;
+        border-radius: 4px;
         box-sizing: border-box;
       }
+      input:focus,
+      select:focus {
+        outline: 2px solid #9a4a2f;
+        outline-offset: 1px;
+        border-color: #9a4a2f;
+      }
+      .actions {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        margin-top: 2rem;
+      }
       button {
-        margin-top: 20px;
-        padding: 8px 16px;
-        font-size: 14px;
+        padding: 0.5rem 1rem;
+        font: inherit;
+        font-size: 0.875rem;
+        font-weight: 600;
+        color: #fff;
+        background: #9a4a2f;
+        border: none;
+        border-radius: 4px;
         cursor: pointer;
       }
+      button.secondary {
+        color: #6b645c;
+        background: transparent;
+        border: 1px solid #d8d2c9;
+        font-weight: 500;
+      }
       #status {
-        margin-left: 12px;
-        font-size: 13px;
-        color: #2a7a2a;
+        font-size: 0.8125rem;
+        color: #3f6b3f;
+      }
+      .budget {
+        margin-top: 2.5rem;
+        padding-top: 1.25rem;
+        border-top: 1px solid #e6e0d7;
+        font-size: 0.8125rem;
+        color: #6b645c;
+      }
+      .budget strong {
+        color: #1c1a17;
+      }
+      .budget.over strong {
+        color: #9a2f2f;
       }
     </style>
   </head>
   <body>
     <h1>Redraft</h1>
+    <p class="tagline">Laziness will not do.</p>
 
     <label for="api-key">Anthropic API key</label>
     <input id="api-key" type="password" autocomplete="off" placeholder="sk-ant-..." />
+    <p class="hint">Stored in this browser only, and sent only to api.anthropic.com.</p>
+
+    <label for="mode">Mode</label>
+    <select id="mode"></select>
+    <p class="hint" id="mode-hint"></p>
 
     <label for="style">Style</label>
-    <select id="style">
-      <option value="plain">Plain</option>
-      <option value="classic">Classic</option>
-      <option value="warm">Warm</option>
-    </select>
+    <select id="style"></select>
 
-    <div>
+    <label for="model">Model</label>
+    <select id="model"></select>
+    <p class="hint">
+      Haiku is the right default: latency is a product feature. Compare against
+      Sonnet with the eval harness, not by impression.
+    </p>
+
+    <div class="actions">
       <button id="save">Save</button>
       <span id="status"></span>
     </div>
 
-    <script src="options.js"></script>
+    <div class="budget" id="budget">
+      <p id="budget-line">Spend so far: —</p>
+      <button class="secondary" id="reset-budget">Reset spend counter</button>
+    </div>
+
+    <script type="module" src="options.js"></script>
   </body>
 </html>

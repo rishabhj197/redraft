@@ -1,80 +1,130 @@
-const ANTHROPIC_API_URL = "https://api.anthropic.com/v1/messages";
-const ANTHROPIC_VERSION = "2023-06-01";
-const MODEL = "claude-haiku-4-5-20251001";
-const MAX_TOKENS = 1024;
-const PROMPT_VERSION = "v1";
+// Service worker: Chrome plumbing only. Everything that could be tested in
+// Node lives in lib/ and is imported here.
 
-const STYLE_PROMPTS = {
-  plain:
-    "Rewrite the user's text following George Orwell's rules for clear writing: prefer short, plain words over long or fancy ones, cut every word that isn't doing work, use the active voice, and never use a long word where a short one will do.",
-  classic:
-    "Rewrite the user's text in the classic prose style described by Thomas & Turner in Clear and Simple as the Truth: confident and unhedged, presenting the truth rather than explaining or arguing for it, as if it were self-evident. State things as direct, declarative fact, as the writer who sees the truth clearly and simply states it. Do not hedge: avoid generic subjects that distance the writer from the claim (e.g. \"one\", \"people\"), avoid modal constructions that soften a statement into a suggestion rather than a fact (e.g. \"should\", \"might\", \"could\"), and avoid qualifiers that hedge the claim itself (e.g. \"arguably\", \"in some sense\", \"to some extent\").",
-  warm:
-    "Rewrite the user's text in a warm, conversational tone: use contractions, address the reader directly in the second person, and write as if speaking to a friend.",
-};
+import { runRedraft } from "./lib/redraft.js";
+import { DEFAULT_MODEL, isKnownModel } from "./lib/request.js";
+import { DEFAULT_MODE, DEFAULT_STYLE, MODES, STYLES } from "./lib/prompts.js";
+import { addSpend, budgetSummary } from "./lib/budget.js";
+import { recordEvent } from "./lib/events.js";
 
-const RESTRAINT_INSTRUCTION =
-  "If the text already fits the target style and cannot be meaningfully improved, return it completely unchanged. Do not make edits for their own sake.";
+const SPEND_KEY = "budgetSpentUsd";
+const EVENTS_KEY = "redraftEvents";
 
-const KEATING_RULE =
-  "Apply the Keating rule: eliminate lazy intensifiers and vague qualifiers (such as \"very\", \"really\", \"quite\", \"extremely\") and replace them with a single precise, stronger word.";
-
-const PRESERVATION_INSTRUCTION =
-  "Preserve the original meaning and formatting of the text.";
-
-const OUTPUT_INSTRUCTION =
-  "Return only the rewritten text. Do not include any preamble, explanation, labels, or surrounding quotation marks.";
-
-const BASE_INSTRUCTIONS = [
-  RESTRAINT_INSTRUCTION,
-  KEATING_RULE,
-  PRESERVATION_INSTRUCTION,
-  OUTPUT_INSTRUCTION,
-].join(" ");
-
-function buildSystemPrompt(style) {
-  const styleBlock = STYLE_PROMPTS[style] ?? STYLE_PROMPTS.plain;
-  return `${styleBlock} ${BASE_INSTRUCTIONS}`;
+function storageGet(keys) {
+  return new Promise((resolve) => chrome.storage.local.get(keys, resolve));
 }
 
-async function redraft(text, style, apiKey) {
-  let response;
+function storageSet(items) {
+  return new Promise((resolve) => chrome.storage.local.set(items, resolve));
+}
+
+// The extension's half of the budget guard: chrome.storage.local holds the
+// running total. It never auto-resets.
+const chromeBudgetStore = {
+  async read() {
+    const stored = await storageGet([SPEND_KEY]);
+    return typeof stored[SPEND_KEY] === "number" ? stored[SPEND_KEY] : 0;
+  },
+  async add(costUsd) {
+    const total = addSpend(await chromeBudgetStore.read(), costUsd);
+    await storageSet({ [SPEND_KEY]: total });
+    return budgetSummary(total);
+  },
+};
+
+// The extension's half of feedback capture. Swapping this for Supabase later
+// is a change to this object and nothing else.
+const chromeEventStore = {
+  async append(event) {
+    const stored = await storageGet([EVENTS_KEY]);
+    const events = Array.isArray(stored[EVENTS_KEY]) ? stored[EVENTS_KEY] : [];
+    events.push(event);
+    await storageSet({ [EVENTS_KEY]: events });
+  },
+};
+
+async function readSettings() {
+  const stored = await storageGet(["apiKey", "style", "mode", "model"]);
+  return {
+    apiKey: stored.apiKey ?? "",
+    style: STYLES.includes(stored.style) ? stored.style : DEFAULT_STYLE,
+    mode: MODES.includes(stored.mode) ? stored.mode : DEFAULT_MODE,
+    model: isKnownModel(stored.model) ? stored.model : DEFAULT_MODEL,
+  };
+}
+
+function sendToTab(tabId, message) {
+  chrome.tabs.sendMessage(tabId, message, () => {
+    if (chrome.runtime.lastError) {
+      console.log(
+        "Redraft: could not reach the content script.",
+        chrome.runtime.lastError.message
+      );
+    }
+  });
+}
+
+async function handleRedraftText(tabId, text) {
+  const settings = await readSettings();
+
+  if (!settings.apiKey) {
+    sendToTab(tabId, {
+      type: "REDRAFT_ERROR",
+      code: "no_api_key",
+      message: "No API key saved. Set one on the Redraft options page.",
+    });
+    return;
+  }
+
   try {
-    response = await fetch(ANTHROPIC_API_URL, {
-      method: "POST",
-      headers: {
-        "x-api-key": apiKey,
-        "anthropic-version": ANTHROPIC_VERSION,
-        "content-type": "application/json",
-        "anthropic-dangerous-direct-browser-access": "true",
+    const { result, costUsd, budget } = await runRedraft(
+      {
+        text,
+        style: settings.style,
+        mode: settings.mode,
+        model: settings.model,
+        apiKey: settings.apiKey,
       },
-      body: JSON.stringify({
-        model: MODEL,
-        max_tokens: MAX_TOKENS,
-        system: buildSystemPrompt(style),
-        messages: [{ role: "user", content: text }],
-      }),
+      { fetch: globalThis.fetch.bind(globalThis), budget: chromeBudgetStore }
+    );
+
+    // Model and prompt version travel with every logged response.
+    console.log("Redraft: result", {
+      promptVersion: result.promptVersion,
+      model: result.model,
+      style: result.style,
+      mode: result.mode,
+      usage: result.usage,
+      callCostUsd: costUsd,
+      budget,
     });
+    console.log(
+      `Redraft: budget — spent ${budget.spentFormatted} of ${budget.limitUsd.toFixed(2)}, ` +
+        `${budget.remainingFormatted} remaining.`
+    );
+
+    sendToTab(tabId, { type: "REDRAFT_RESULT", original: text, result });
   } catch (error) {
-    console.log("Redraft: network error calling the Anthropic API.", error.message);
-    return;
-  }
+    if (error.budget) {
+      console.log(
+        `Redraft: budget — spent ${error.budget.spentFormatted}, ` +
+          `${error.budget.remainingFormatted} remaining.`
+      );
+    }
 
-  if (!response.ok) {
-    const body = await response.text();
-    console.log("Redraft: Anthropic API request failed.", {
-      status: response.status,
-      body,
+    // The budget guard is terminal. Report and stop; never retry.
+    console.log("Redraft: call failed.", {
+      code: error.code ?? "unknown",
+      message: error.message,
     });
-    return;
+
+    sendToTab(tabId, {
+      type: "REDRAFT_ERROR",
+      code: error.code ?? "unknown",
+      message: error.message,
+      budget: error.code === "budget_exceeded" ? budgetSummary(error.spentUsd) : null,
+    });
   }
-
-  const data = await response.json();
-  const redraftText = data.content?.[0]?.text ?? "";
-
-  console.log("Redraft: original text", text);
-  console.log("Redraft: redrafted text", redraftText);
-  console.log("Redraft: usage", { promptVersion: PROMPT_VERSION, usage: data.usage });
 }
 
 chrome.commands.onCommand.addListener((command) => {
@@ -82,31 +132,23 @@ chrome.commands.onCommand.addListener((command) => {
 
   chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
     const tab = tabs[0];
-    if (!tab || !tab.id) return;
-
-    chrome.tabs.sendMessage(tab.id, { type: "REDRAFT_CAPTURE" }, () => {
-      if (chrome.runtime.lastError) {
-        console.log(
-          "Redraft: could not reach the content script on this tab.",
-          chrome.runtime.lastError.message
-        );
-      }
-    });
+    if (!tab?.id) return;
+    sendToTab(tab.id, { type: "REDRAFT_CAPTURE" });
   });
 });
 
-chrome.runtime.onMessage.addListener((message) => {
-  if (message?.type !== "REDRAFT_TEXT") return;
+chrome.runtime.onMessage.addListener((message, sender) => {
+  const tabId = sender?.tab?.id;
+  if (!tabId) return;
 
-  chrome.storage.local.get(["apiKey", "style"], (result) => {
-    const apiKey = result.apiKey;
-    const style = result.style ?? "plain";
+  if (message?.type === "REDRAFT_TEXT") {
+    handleRedraftText(tabId, message.text);
+    return;
+  }
 
-    if (!apiKey) {
-      console.log("Redraft: no API key saved. Set one on the options page.");
-      return;
-    }
-
-    redraft(message.text, style, apiKey);
-  });
+  if (message?.type === "REDRAFT_EVENT") {
+    recordEvent(message.payload, chromeEventStore).catch((error) =>
+      console.log("Redraft: could not record feedback event.", error.message)
+    );
+  }
 });
