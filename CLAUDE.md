@@ -21,7 +21,7 @@ There is no build step and no lint step. The extension is loaded unpacked from t
 
 ## Two rules that are easy to break
 
-- **`lib/` must stay free of `chrome.*` and of I/O.** That is what makes it testable in Node, and what lets `run-evals.js` exercise the exact prompt-assembly code the extension ships. Storage and `fetch` are injected — see `lib/redraft.js`. The one exception is `lib/budget-store-node.js`, which is Node-only and imported only by Node scripts. Content scripts cannot be ES modules, so `content.js` reaches `lib/` through the service worker rather than importing it.
+- **`lib/` must stay free of `chrome.*` and of I/O.** That is what makes it testable in Node, and what lets `run-evals.js` exercise the exact prompt-assembly code the extension ships. Storage and `fetch` are injected — see `lib/redraft.js`. Two files sit outside the usual ES-module shape: `lib/budget-store-node.js` is Node-only and imported only by Node scripts, and `lib/match.js` is a *classic script* that hangs its surface on `globalThis`, so the same file loads as a content script in Chrome and as an import in Node tests. Content scripts cannot be ES modules, so `content.js` reaches the rest of `lib/` through the service worker — but not `match.js`: Apply has to locate the excerpt and call `execCommand` inside the click's own user gesture, and a round trip through the worker would break that.
 - **The budget guard is terminal.** `assertWithinBudget` throws at 90% of `BUDGET_LIMIT_USD`. Anything that loops must catch `BudgetExceededError`, stop immediately, and report what is left undone. Never retry it, never continue past it, never widen the cap to get a run to finish. `MODEL_RATES` in `lib/budget.js` is hand-maintained — if Anthropic changes pricing and that table does not, every cost figure is wrong.
 
 ## What Redraft is
@@ -41,15 +41,18 @@ lib/                    PURE — no chrome.*, no I/O, testable in Node
 ├── parse.js            response parsing + Coach JSON contract validation
 ├── budget.js           MODEL_RATES, cost per call, the $5 cap and the guard
 ├── events.js           feedback event shape + the single recordEvent()
+├── match.js            excerpt matching: normalise, fuzzy fallback, hashText
+│                       (classic script — also loaded as a content script)
 ├── redraft.js          one call end to end; fetch and storage injected
 └── budget-store-node.js   Node-only .budget.json store (not imported by the extension)
 
 tests/                  node --test, no dependencies, fetch mocked
 
 Chrome extension        THIN — Chrome plumbing only
-├── content script      detects trigger, captures text, renders the Shadow DOM widget
+├── content script      trigger + idle watcher, selection scoping, Shadow DOM
+│                       widget and passive badge, execCommand writes
 ├── service worker      ES module; calls the API via lib/, owns the storage adapters
-├── options page        API key · mode · style · model · spend readout
+├── options page        API key · mode · style · model · auto-analysis · spend
 ├── chrome.storage      key, settings, budget total, feedback events
 └── supabase-js         (not yet) writes feedback events directly from the extension
 
@@ -65,6 +68,39 @@ Eval harness (separate top-level folder, e.g. eval/)
 There is **no backend server in v1**. The extension talks to Supabase directly via `supabase-js` (anon key + row-level security) and to Anthropic directly using a key stored in `chrome.storage`. This is only safe because the developer is the sole user in v1.
 
 **This changes at Phase 2** (Chrome Web Store publish): a personal API key can no longer ship inside code strangers run. That requires adding a Vercel serverless function that holds the Anthropic key, with the extension calling that endpoint instead of Anthropic directly, plus a cost ceiling / rate limit. Don't build this proxy until Phase 2 actually starts.
+
+## How a suggestion reaches the writer
+
+**Analysis is automatic; interruption is not.** The content script watches the
+focused field and analyses it silently once the text has been idle ~1.5s, ends a
+sentence, and differs from what was read last. The whole of the interruption is
+a small pill near the field's bottom-right giving a count. **Nothing opens the
+panel except a click on that pill or Ctrl+Shift+K** — a tool that grabs you
+mid-sentence gets turned off. No suggestions means no pill and no message.
+
+Results are cached by text hash, so identical text is never paid for twice, and
+`budget_exceeded` stops passive analysis for the rest of the page's life rather
+than asking again. The options page has a toggle back to shortcut-only.
+
+Inline underlines in the text are deliberately **not** built: that is the half of
+Grammarly that requires overlaying or mutating arbitrary contenteditable DOM, and
+it breaks rich editors. The badge is most of the value for a fraction of the risk.
+
+## Applying an edit without wrecking the field
+
+Two rules, both learned from bugs that made the tool unusable:
+
+- **Never match the excerpt with bare `indexOf`.** Models requote text with
+  curly quotes, em dashes for `--`, collapsed whitespace, and the odd changed
+  word. `lib/match.js` normalises both sides, maps the match back to the
+  original offsets, and falls back to a similarity search with a confidence
+  floor. Below the floor it gives up rather than replacing the wrong span.
+- **Never assign `innerText` or `value`.** Both wipe the undo stack, and
+  `innerText` destroys formatting in Gmail. Writes go through
+  `document.execCommand("insertText")` over a selected Range, which is
+  deprecated and still the only way onto the browser's native undo stack and
+  the only way React-managed editors notice the change. Ctrl+Z must undo an
+  applied suggestion; if that stops being true, something has regressed.
 
 ## Two modes
 

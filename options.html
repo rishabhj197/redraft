@@ -89,6 +89,20 @@
         font-size: 0.8125rem;
         color: #3f6b3f;
       }
+      .check {
+        display: flex;
+        align-items: flex-start;
+        gap: 0.6rem;
+        margin-top: 1.5rem;
+        font-weight: 600;
+        font-size: 0.8125rem;
+      }
+      .check input {
+        width: auto;
+        margin: 0.15rem 0 0;
+        flex: none;
+        accent-color: #9a4a2f;
+      }
       .budget {
         margin-top: 2.5rem;
         padding-top: 1.25rem;
@@ -124,6 +138,16 @@
     <p class="hint">
       Haiku is the right default: latency is a product feature. Compare against
       Sonnet with the eval harness, not by impression.
+    </p>
+
+    <label class="check" for="auto-analyse">
+      <input id="auto-analyse" type="checkbox" />
+      <span>Read the draft on its own</span>
+    </label>
+    <p class="hint">
+      Redraft reads a field once you have stopped typing and finished a
+      sentence, then shows a count near the box. It never opens on its own.
+      Turn this off to work by <kbd>Ctrl+Shift+K</kbd> alone.
     </p>
 
     <div class="actions">

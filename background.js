@@ -64,7 +64,11 @@ function sendToTab(tabId, message) {
   });
 }
 
-async function handleRedraftText(tabId, text) {
+// requestId travels out and back untouched. The content script now runs a
+// passive analysis and an explicit one against the same worker, and has to be
+// able to tell which answer belongs to which — and to drop the ones that belong
+// to neither because the writer has moved on.
+async function handleRedraftText(tabId, text, requestId) {
   const settings = await readSettings();
 
   if (!settings.apiKey) {
@@ -72,6 +76,7 @@ async function handleRedraftText(tabId, text) {
       type: "REDRAFT_ERROR",
       code: "no_api_key",
       message: "No API key saved. Set one on the Redraft options page.",
+      requestId,
     });
     return;
   }
@@ -103,7 +108,12 @@ async function handleRedraftText(tabId, text) {
         `${budget.remainingFormatted} remaining.`
     );
 
-    sendToTab(tabId, { type: "REDRAFT_RESULT", original: text, result });
+    sendToTab(tabId, {
+      type: "REDRAFT_RESULT",
+      original: text,
+      result,
+      requestId,
+    });
   } catch (error) {
     // Remaining budget is logged after every call, whatever the outcome.
     const budget = error.budget ?? budgetSummary(await chromeBudgetStore.read());
@@ -123,6 +133,7 @@ async function handleRedraftText(tabId, text) {
       code: error.code ?? "unknown",
       message: error.message,
       budget,
+      requestId,
     });
   }
 }
@@ -142,7 +153,7 @@ chrome.runtime.onMessage.addListener((message, sender) => {
   if (!tabId) return;
 
   if (message?.type === "REDRAFT_TEXT") {
-    handleRedraftText(tabId, message.text);
+    handleRedraftText(tabId, message.text, message.requestId);
     return;
   }
 

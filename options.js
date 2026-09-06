@@ -9,6 +9,7 @@ const modeSelect = document.getElementById("mode");
 const modeHint = document.getElementById("mode-hint");
 const styleSelect = document.getElementById("style");
 const modelSelect = document.getElementById("model");
+const autoAnalyseInput = document.getElementById("auto-analyse");
 const saveButton = document.getElementById("save");
 const status = document.getElementById("status");
 const budgetBlock = document.getElementById("budget");
@@ -85,7 +86,7 @@ function flash(text) {
 
 function loadSaved() {
   chrome.storage.local.get(
-    ["apiKey", "style", "mode", "model", SPEND_KEY],
+    ["apiKey", "style", "mode", "model", "autoAnalyse", SPEND_KEY],
     (stored) => {
       if (stored.apiKey) apiKeyInput.value = stored.apiKey;
       modeSelect.value = MODES.includes(stored.mode) ? stored.mode : DEFAULT_MODE;
@@ -93,6 +94,7 @@ function loadSaved() {
       modelSelect.value = MODELS.some((m) => m.id === stored.model)
         ? stored.model
         : DEFAULT_MODEL;
+      autoAnalyseInput.checked = stored.autoAnalyse !== false;
       updateModeHint();
       renderBudget(typeof stored[SPEND_KEY] === "number" ? stored[SPEND_KEY] : 0);
     }
@@ -106,6 +108,7 @@ saveButton.addEventListener("click", () => {
       mode: modeSelect.value,
       style: styleSelect.value,
       model: modelSelect.value,
+      autoAnalyse: autoAnalyseInput.checked,
     },
     () => flash("Saved")
   );
