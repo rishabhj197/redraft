@@ -52,8 +52,32 @@ let nextRequestId = 1;
 
 // --- field capture -------------------------------------------------------
 
+// A block editor (Notion, and anything built like it) can make the whole page
+// one editing host with a contenteditable leaf per block. The focused element
+// is then the page, and reading it sweeps up the title, every other block and
+// the editor's own hover controls as one run of text. Focus says which field
+// the writer is in; the caret says which block of it they are writing.
 function focusedField() {
-  return editableField(document.activeElement);
+  const field = editableField(document.activeElement);
+  if (!field?.isContentEditable) return field;
+  return caretBlock(field) ?? field;
+}
+
+/** The innermost element that declares itself editable around the caret, inside `host`. */
+function caretBlock(host) {
+  const node = window.getSelection()?.anchorNode;
+  if (!node || !host.contains(node)) return null;
+  let el = node.nodeType === Node.ELEMENT_NODE ? node : node.parentElement;
+  for (; el && el !== host; el = el.parentElement) {
+    if (declaresEditable(el)) return el;
+  }
+  return null;
+}
+
+function declaresEditable(el) {
+  const value = el.getAttribute("contenteditable");
+  if (value === null) return false;
+  return ["", "true", "plaintext-only"].includes(value.toLowerCase());
 }
 
 function editableField(el) {
@@ -99,6 +123,9 @@ function serializeEditable(root) {
       const tag = child.tagName;
       if (SKIP_TAGS.has(tag)) continue;
       if (child.hidden || child.style?.display === "none") continue;
+      // Editor controls that live inside the editable are not the writer's prose.
+      if (child.getAttribute("aria-hidden") === "true") continue;
+      if (child.getAttribute("role") === "button") continue;
 
       if (tag === "BR") {
         text += "\n";
@@ -992,6 +1019,12 @@ document.addEventListener(
   },
   true
 );
+
+// Moving between blocks of one editor fires no focusin, so a badge counting
+// another block's suggestions has to be dropped when the caret leaves it.
+document.addEventListener("selectionchange", () => {
+  if (auto.badge && focusedField() !== auto.badge.field) hideBadge();
+});
 
 window.addEventListener("scroll", reposition, true);
 window.addEventListener("resize", reposition);
