@@ -3,8 +3,8 @@
   "name": "Redraft",
   "version": "0.2.0",
   "description": "Improves your writing in the box where you're already writing it.",
-  "permissions": ["storage"],
-  "host_permissions": ["https://api.anthropic.com/*"],
+  "permissions": ["storage", "scripting"],
+  "host_permissions": ["<all_urls>", "https://api.anthropic.com/*"],
   "background": {
     "service_worker": "background.js",
     "type": "module"
@@ -12,7 +12,9 @@
   "content_scripts": [
     {
       "matches": ["<all_urls>"],
-      "js": ["lib/match.js", "content.js"],
+      "js": ["lib/match.js", "lib/trigger.js", "content.js"],
+      "all_frames": true,
+      "match_about_blank": true,
       "run_at": "document_idle"
     }
   ],

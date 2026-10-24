@@ -8,7 +8,20 @@
 // execCommand() inside the click's own user gesture, so that lookup cannot go
 // round the service worker and back.
 
+(() => {
+// A reload injects this file again into the same isolated world. Top-level
+// const would throw the second time, and the first copy's DOM listeners would
+// keep firing after its extension context had died. One session per world:
+// the new copy retires the old one before it listens.
+const previousSession = globalThis.__redraftSession;
+
 const { findExcerpt, hashText } = globalThis.RedraftMatch;
+const { isFinishedThought } = globalThis.RedraftTrigger ?? {};
+
+if (typeof findExcerpt !== "function" || typeof isFinishedThought !== "function") {
+  console.log("Redraft: helper scripts did not load, so this frame will stay quiet.");
+  return;
+}
 
 const HOST_ID = "redraft-widget-host";
 const BADGE_ID = "redraft-badge-host";
@@ -18,9 +31,6 @@ const ACCENT = "#9a4a2f";
 const IDLE_MS = 1500;
 const MIN_AUTO_CHARS = 40;
 const CACHE_LIMIT = 40;
-// A draft is worth reading once the writer has finished a thought.
-const SENTENCE_END = /[.!?…]["'’”)\]]*\s*$/;
-
 const state = {
   field: null,
   original: "",
@@ -45,6 +55,9 @@ const auto = {
   cache: new Map(),
   badge: null,
   badgeKey: null,
+  // Set on Enter, before the editor moves the caret into a new block, so the
+  // paragraph just left is still the one that gets read.
+  snapshot: null,
 };
 
 const pending = new Map();
@@ -58,14 +71,21 @@ let nextRequestId = 1;
 // the editor's own hover controls as one run of text. Focus says which field
 // the writer is in; the caret says which block of it they are writing.
 function focusedField() {
-  const field = editableField(document.activeElement);
+  const field = editableField(deepActiveElement());
   if (!field?.isContentEditable) return field;
   return caretBlock(field) ?? field;
 }
 
+/** The focused element, walking into open shadow roots. Not into iframes — each frame has its own content script. */
+function deepActiveElement() {
+  let el = document.activeElement;
+  while (el?.shadowRoot?.activeElement) el = el.shadowRoot.activeElement;
+  return el;
+}
+
 /** The innermost element that declares itself editable around the caret, inside `host`. */
 function caretBlock(host) {
-  const node = window.getSelection()?.anchorNode;
+  const node = selectionIn(host)?.anchorNode;
   if (!node || !host.contains(node)) return null;
   let el = node.nodeType === Node.ELEMENT_NODE ? node : node.parentElement;
   for (; el && el !== host; el = el.parentElement) {
@@ -191,6 +211,50 @@ function offsetAt(segments, node, offset) {
   return last ? last.end : null;
 }
 
+/** The selection that belongs to `field`, including one inside an open shadow root. */
+function selectionIn(field) {
+  const view = field.ownerDocument?.defaultView;
+  const docSel = view?.getSelection?.();
+  if (docSel?.anchorNode && field.contains(docSel.anchorNode)) return docSel;
+  const root = field.getRootNode?.();
+  if (root && typeof ShadowRoot !== "undefined" && root instanceof ShadowRoot) {
+    const shadowSel = root.getSelection?.();
+    if (shadowSel?.anchorNode && field.contains(shadowSel.anchorNode)) return shadowSel;
+  }
+  return null;
+}
+
+/** Caret offset in the serialised field text, or null when it cannot be placed. */
+function caretOffset(field, segments) {
+  if (!field.isContentEditable) {
+    return typeof field.selectionStart === "number" ? field.selectionStart : null;
+  }
+  const selection = selectionIn(field);
+  if (!selection?.rangeCount) return null;
+  const range = selection.getRangeAt(0);
+  if (!field.contains(range.endContainer)) return null;
+  return offsetAt(segments, range.endContainer, range.endOffset);
+}
+
+/**
+ * The draft the writer is actually in: the serialised text up to the caret.
+ * A Gmail signature, or the next Notion block, sits past the caret and must
+ * not keep a finished sentence from counting as finished.
+ *
+ * @returns {{ text: string, raw: string, scope: {start: number, end: number} | null }}
+ *   `raw` keeps the trailing break so Enter can be recognised. `text` is what
+ *   gets sent: the words, without the break hanging off the end.
+ */
+function draftBeforeCaret(field) {
+  const { text, segments } = fieldText(field);
+  const offset = caretOffset(field, segments);
+  if (offset == null) return { text, raw: text, scope: null };
+  const raw = text.slice(0, offset);
+  const trimmed = raw.replace(/[\s\u00A0\u200B\uFEFF]+$/g, "");
+  if (!trimmed) return { text: "", raw, scope: null };
+  return { text: trimmed, raw, scope: { start: 0, end: trimmed.length } };
+}
+
 /** The selected span of the field, as text offsets, or null if nothing is selected. */
 function selectionScope(field, segments) {
   if (!field.isContentEditable) {
@@ -199,7 +263,7 @@ function selectionScope(field, segments) {
     return end > start ? { start, end } : null;
   }
 
-  const selection = field.ownerDocument.defaultView?.getSelection();
+  const selection = selectionIn(field);
   if (!selection || selection.isCollapsed || !selection.rangeCount) return null;
 
   const range = selection.getRangeAt(0);
@@ -477,7 +541,8 @@ function openWidget() {
   style.textContent = STYLES;
   root.append(style);
 
-  document.body.append(host);
+  const doc = placement().doc;
+  (doc.body ?? document.body).append(host);
   state.host = host;
   state.root = root;
 
@@ -490,10 +555,50 @@ function openWidget() {
   return root;
 }
 
+/**
+ * Where the panel should live, and how far the field's viewport box has to
+ * move to land in that document.
+ *
+ * Gmail's compose body is an about:blank iframe. A panel appended inside that
+ * frame is clipped by the frame. Same-origin frames (Gmail, Notion) can host
+ * the panel on the top document instead; the shift is the iframe's position.
+ * A cross-origin frame cannot, and the panel stays inside it.
+ */
+function placement() {
+  let x = 0;
+  let y = 0;
+  let win = window;
+  try {
+    while (win !== win.top) {
+      const frame = win.frameElement;
+      if (!frame) return { doc: document, x: 0, y: 0 };
+      const rect = frame.getBoundingClientRect();
+      x += rect.left;
+      y += rect.top;
+      win = win.parent;
+    }
+    if (win.document?.body) return { doc: win.document, x, y };
+  } catch {
+    // Cross-origin parent. The panel stays in this frame.
+  }
+  return { doc: document, x: 0, y: 0 };
+}
+
 function fieldBox(field) {
-  return field?.isConnected
+  const place = placement();
+  const rect = field?.isConnected
     ? field.getBoundingClientRect()
-    : { left: 24, right: 24, bottom: 24, top: 24 };
+    : { left: 24, right: window.innerWidth - 24, bottom: 24, top: 24, width: 0, height: 0 };
+  return {
+    left: rect.left + place.x,
+    right: rect.right + place.x,
+    top: rect.top + place.y,
+    bottom: rect.bottom + place.y,
+    width: rect.width ?? 0,
+    height: rect.height ?? 0,
+    view: place.doc.defaultView ?? window,
+    doc: place.doc,
+  };
 }
 
 function position() {
@@ -501,12 +606,13 @@ function position() {
   const gap = 8;
   const width = 380;
   const box = fieldBox(state.field);
+  const view = state.host.ownerDocument.defaultView ?? window;
 
   const left = Math.min(
     Math.max(8, box.left),
-    Math.max(8, window.innerWidth - width - 8)
+    Math.max(8, view.innerWidth - width - 8)
   );
-  const belowFits = window.innerHeight - box.bottom > 220;
+  const belowFits = view.innerHeight - box.bottom > 220;
   const top = belowFits ? box.bottom + gap : Math.max(8, box.top - gap - 220);
 
   state.host.style.left = `${left}px`;
@@ -618,7 +724,8 @@ function showBadge(field, key, count, onOpen) {
   button.addEventListener("click", onOpen);
 
   root.append(style, button);
-  document.body.append(host);
+  const doc = placement().doc;
+  (doc.body ?? document.body).append(host);
 
   auto.badge = { host, button, field };
   auto.badgeKey = key;
@@ -633,9 +740,10 @@ function positionBadge() {
     return;
   }
 
-  const box = field.getBoundingClientRect();
+  const box = fieldBox(field);
+  const view = host.ownerDocument.defaultView ?? window;
   // Off-screen fields would otherwise leave a badge floating over the page.
-  if (box.bottom < 0 || box.top > window.innerHeight || box.width === 0) {
+  if (box.bottom < 0 || box.top > view.innerHeight || box.width === 0) {
     host.style.visibility = "hidden";
     return;
   }
@@ -643,12 +751,12 @@ function positionBadge() {
 
   const pill = button.getBoundingClientRect();
   const gap = 6;
-  const belowFits = window.innerHeight - box.bottom > pill.height + gap + 4;
+  const belowFits = view.innerHeight - box.bottom > pill.height + gap + 4;
   const top = belowFits ? box.bottom + gap : box.bottom - pill.height - gap;
 
   host.style.left = `${Math.max(
     8,
-    Math.min(box.right - pill.width, window.innerWidth - pill.width - 8)
+    Math.min(box.right - pill.width, view.innerWidth - pill.width - 8)
   )}px`;
   host.style.top = `${Math.max(8, top)}px`;
 }
@@ -868,11 +976,11 @@ function runManually() {
   send({ field, text, scope, kind: "manual" });
 }
 
-function remember(key, original, result) {
+function remember(key, original, result, scope) {
   if (auto.cache.size >= CACHE_LIMIT) {
     auto.cache.delete(auto.cache.keys().next().value);
   }
-  auto.cache.set(key, { original, result });
+  auto.cache.set(key, { original, result, scope: scope ?? null });
 }
 
 function scheduleAnalysis() {
@@ -882,53 +990,77 @@ function scheduleAnalysis() {
   auto.timer = setTimeout(analyseIfIdle, IDLE_MS);
 }
 
-/**
- * The passive path. Three gates keep it from spending on half-written text:
- * the draft has to be long enough to be worth reading, finished enough to end
- * a sentence, and different from whatever was read last.
- */
-function analyseIfIdle() {
-  if (!auto.enabled || auto.stopped) return;
-  if (!document.hasFocus()) return;
-
-  const field = focusedField();
-  if (!field) return;
-
-  const { text } = fieldText(field);
+/** Send or replay one draft. `text` is the slice worth reading, not always the whole field. */
+function consider(field, text, scope) {
+  if (!field?.isConnected) return;
   if (text.trim().length < MIN_AUTO_CHARS) return;
-  if (!SENTENCE_END.test(text)) return;
 
   const key = hashText(text);
   if (key === auto.badgeKey) return;
 
   const cached = auto.cache.get(key);
   if (cached) {
-    offer(field, key, cached.original, cached.result);
+    offer(field, key, cached.original, cached.result, cached.scope ?? scope);
     return;
   }
 
-  send({ field, text, scope: null, kind: "auto" });
+  send({ field, text, scope, kind: "auto" });
+}
+
+/**
+ * The passive path. The draft has to be long enough to be worth reading,
+ * finished enough that the writer has left the thought (punctuation or Enter),
+ * and different from whatever was read last.
+ */
+function analyseIfIdle() {
+  if (!auto.enabled || auto.stopped) return;
+
+  const snapshot = auto.snapshot;
+  auto.snapshot = null;
+  if (snapshot?.text) {
+    consider(snapshot.field, snapshot.text, snapshot.scope);
+    return;
+  }
+
+  // document.hasFocus() is true for a parent whose iframe has the caret, so
+  // it cannot be the gate. The focused field can.
+  const field = focusedField();
+  if (!field) return;
+
+  const draft = draftBeforeCaret(field);
+  if (!isFinishedThought(draft.raw)) return;
+  consider(field, draft.text, draft.scope);
 }
 
 /** Show the badge, and nothing else. The panel opens only when it is clicked. */
-function offer(field, key, original, result) {
+function offer(field, key, original, result, scope) {
   const count = suggestionCount(result);
   if (count === 0) return;
-  if (focusedField() !== field) return;
+  if (!field?.isConnected) return;
 
   showBadge(field, key, count, () => {
     state.field = field;
     hideBadge();
-    render(original, result, null);
+    render(original, result, scope ?? null);
   });
 }
 
 // --- messaging -----------------------------------------------------------
 
-chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+function onMessage(message, sender, sendResponse) {
+  if (!sessionAlive()) {
+    endSession();
+    return;
+  }
+
   if (message?.type === "REDRAFT_CAPTURE") {
+    // The command is delivered to every frame. Only the frame that actually
+    // holds the caret answers; a parent frame whose active element is the
+    // compose iframe must not swallow it.
+    const field = focusedField();
+    if (!field) return;
     runManually();
-    sendResponse();
+    sendResponse({ ok: true });
     return;
   }
 
@@ -939,13 +1071,13 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (!request) return;
 
     if (request.kind === "auto") {
-      remember(request.key, message.original, message.result);
-      offer(request.field, request.key, message.original, message.result);
+      remember(request.key, message.original, message.result, request.scope);
+      offer(request.field, request.key, message.original, message.result, request.scope);
       return;
     }
 
     if (state.dismissed) return;
-    remember(request.key, message.original, message.result);
+    remember(request.key, message.original, message.result, request.scope);
     render(message.original, message.result, request.scope);
     return;
   }
@@ -981,55 +1113,179 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       showMessage(message.message, { error: true });
     }
   }
-});
+}
 
 // --- wiring --------------------------------------------------------------
 
-chrome.storage.local.get(["autoAnalyse"], (stored) => {
-  auto.enabled = stored.autoAnalyse !== false;
-});
+function fieldFromEvent(event) {
+  const path = typeof event.composedPath === "function" ? event.composedPath() : [event.target];
+  for (const node of path) {
+    const field = editableField(node);
+    if (field) return field;
+  }
+  return null;
+}
 
-chrome.storage.onChanged.addListener((changes, area) => {
+function sessionAlive() {
+  if (globalThis.__redraftSession?.retire !== endSession) return false;
+  try {
+    return Boolean(chrome.runtime?.id);
+  } catch {
+    return false;
+  }
+}
+
+function onStorage(changes, area) {
+  if (!sessionAlive()) {
+    endSession();
+    return;
+  }
   if (area !== "local" || !changes.autoAnalyse) return;
   auto.enabled = changes.autoAnalyse.newValue !== false;
   if (!auto.enabled) {
     clearTimeout(auto.timer);
+    auto.snapshot = null;
     hideBadge();
   }
-});
+}
 
-document.addEventListener(
-  "input",
-  (event) => {
-    if (!editableField(event.target)) return;
-    scheduleAnalysis();
-  },
-  true
-);
+function onInput(event) {
+  if (!sessionAlive()) {
+    endSession();
+    return;
+  }
+  const field = fieldFromEvent(event);
+  if (!field) return;
 
-document.addEventListener(
-  "focusin",
-  (event) => {
-    if (!editableField(event.target)) {
-      hideBadge();
-      return;
+  // Enter in Notion moves the caret into a fresh empty block and fires input
+  // there. That block is not a new draft, and it must not throw away the
+  // paragraph just finished. Typing on after the break keeps the snapshot as
+  // long as the finished paragraph is still the start of the field.
+  if (auto.snapshot) {
+    if (field === auto.snapshot.field) {
+      const draft = draftBeforeCaret(field);
+      const intact =
+        draft.text === auto.snapshot.text || draft.text.startsWith(auto.snapshot.text);
+      if (!intact) auto.snapshot = null;
     }
-    if (auto.badge && auto.badge.field !== event.target) hideBadge();
-    scheduleAnalysis();
-  },
-  true
-);
+  }
 
-// Moving between blocks of one editor fires no focusin, so a badge counting
-// another block's suggestions has to be dropped when the caret leaves it.
-document.addEventListener("selectionchange", () => {
-  if (auto.badge && focusedField() !== auto.badge.field) hideBadge();
-});
+  scheduleAnalysis();
+}
 
-window.addEventListener("scroll", reposition, true);
-window.addEventListener("resize", reposition);
+function onFocusIn(event) {
+  if (!sessionAlive()) {
+    endSession();
+    return;
+  }
+  const field = fieldFromEvent(event);
+  if (!field) {
+    if (!auto.snapshot) hideBadge();
+    return;
+  }
+  if (auto.badge && auto.badge.field !== field) hideBadge();
+  scheduleAnalysis();
+}
+
+function onEnter(event) {
+  if (!sessionAlive()) {
+    endSession();
+    return;
+  }
+  if (event.key !== "Enter" || event.isComposing) return;
+  if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
+  const field = focusedField();
+  if (!field) return;
+  const draft = draftBeforeCaret(field);
+  if (draft.text.trim().length < MIN_AUTO_CHARS) return;
+  auto.snapshot = { field, text: draft.text, scope: draft.scope };
+  scheduleAnalysis();
+}
+
+function onSelectionChange() {
+  // The caret leaving a block is not a reason to drop the badge. Enter in
+  // Notion moves the caret into the next block before the count appears; the
+  // count belongs to the paragraph just finished. Typing schedules a new
+  // read and clears it, and a disconnected field is dropped while positioning.
+  if (auto.badge && !auto.badge.field?.isConnected) hideBadge();
+}
 
 function reposition() {
   position();
   positionBadge();
 }
+
+const viewportUndos = [];
+
+function bindViewport() {
+  const wins = [];
+  let win = window;
+  try {
+    while (win) {
+      wins.push(win);
+      if (win === win.top) break;
+      win = win.parent;
+    }
+  } catch {
+    // Stop at a cross-origin parent. This frame's own window is already listed.
+  }
+  for (const w of wins) {
+    w.addEventListener("scroll", reposition, true);
+    w.addEventListener("resize", reposition);
+    viewportUndos.push(() => {
+      w.removeEventListener("scroll", reposition, true);
+      w.removeEventListener("resize", reposition);
+    });
+  }
+}
+
+function endSession() {
+  try {
+    chrome.runtime.onMessage.removeListener(onMessage);
+  } catch {
+    // The extension context has already gone.
+  }
+  try {
+    chrome.storage.onChanged.removeListener(onStorage);
+  } catch {
+    // Same.
+  }
+  document.removeEventListener("input", onInput, true);
+  document.removeEventListener("compositionend", onInput, true);
+  document.removeEventListener("focusin", onFocusIn, true);
+  document.removeEventListener("keydown", onEnter, true);
+  document.removeEventListener("selectionchange", onSelectionChange);
+  for (const undo of viewportUndos) undo();
+  viewportUndos.length = 0;
+  clearTimeout(auto.timer);
+  auto.snapshot = null;
+  hideBadge();
+  closeWidget();
+  if (globalThis.__redraftSession?.retire === endSession) {
+    globalThis.__redraftSession = null;
+  }
+}
+
+globalThis.__redraftSession = { retire: endSession };
+try {
+  previousSession?.retire?.();
+} catch {
+  // The previous copy's context may already be dead. Its DOM listeners are
+  // removed by retire() when that still works, and ignored when it does not.
+}
+
+chrome.storage.local.get(["autoAnalyse"], (stored) => {
+  if (!sessionAlive()) return;
+  auto.enabled = stored.autoAnalyse !== false;
+});
+
+chrome.storage.onChanged.addListener(onStorage);
+chrome.runtime.onMessage.addListener(onMessage);
+
+document.addEventListener("input", onInput, true);
+document.addEventListener("compositionend", onInput, true);
+document.addEventListener("focusin", onFocusIn, true);
+document.addEventListener("keydown", onEnter, true);
+document.addEventListener("selectionchange", onSelectionChange);
+bindViewport();
+})();
