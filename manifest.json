@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Redraft",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Improves your writing in the box where you're already writing it.",
   "permissions": ["storage", "scripting"],
   "host_permissions": ["<all_urls>", "https://api.anthropic.com/*"],
@@ -27,7 +27,13 @@
       "suggested_key": {
         "default": "Ctrl+Shift+K"
       },
-      "description": "Redraft the currently focused text field"
+      "description": "Ask Redraft for hints on the focused field"
+    },
+    "apply-hint": {
+      "suggested_key": {
+        "default": "Ctrl+Shift+L"
+      },
+      "description": "Apply the first Redraft hint"
     }
   }
 }

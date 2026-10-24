@@ -46,6 +46,11 @@ const state = {
   dismissed: false,
 };
 
+// Hints currently on screen, in order. Ctrl+Shift+L applies the first one
+// and only the first one. Nothing is written unless a hint is applied.
+const openHints = [];
+let lastApplyAt = 0;
+
 const auto = {
   enabled: true,
   // Set when the budget runs out. Passive analysis must never keep spending
@@ -453,6 +458,7 @@ const STYLES = `
   .message { padding: 16px 18px 18px; color: #4b453e; }
   .message.error { color: #8a2f2f; }
   .message strong { display: block; margin-bottom: 4px; color: #1c1a17; }
+  .card .section-label { margin-top: 0; }
   .section-label {
     margin: 18px 0 8px;
     font-size: 11px;
@@ -509,6 +515,7 @@ const STYLES = `
 `;
 
 function closeWidget() {
+  openHints.length = 0;
   state.dismissed = true;
   if (state.onKeydown) {
     document.removeEventListener("keydown", state.onKeydown, true);
@@ -717,9 +724,7 @@ function showBadge(field, key, count, onOpen) {
   const button = document.createElement("button");
   button.append(
     Object.assign(document.createElement("span"), { className: "dot" }),
-    document.createTextNode(
-      count === 1 ? "1 suggestion" : `${count} suggestions`
-    )
+    document.createTextNode(count === 1 ? "1 hint" : `${count} hints`)
   );
   button.addEventListener("click", onOpen);
 
@@ -831,64 +836,79 @@ function cardActions(card, suggestion, apply) {
 }
 
 function retire(card) {
+  const index = openHints.findIndex((item) => item.card === card);
+  if (index !== -1) openHints.splice(index, 1);
   const panelNode = card.closest(".panel");
   card.remove();
   if (panelNode && !panelNode.querySelector(".card")) closeWidget();
 }
 
-function suggestionCard(suggestion) {
+function hintCard(hint) {
   const card = el("div", "card");
-  card.append(el("div", "excerpt", suggestion.excerpt));
-  card.append(el("p", "issue", suggestion.issue));
-  card.append(el("div", "fix", suggestion.fix));
-  card.append(el("p", "why", suggestion.why));
-  card.append(
-    cardActions(card, suggestion, () =>
-      replaceOnce(state.field, suggestion.excerpt, suggestion.fix)
-    )
-  );
-  return card;
-}
-
-function vocabularyCard(entry) {
-  const card = el("div", "card");
+  card.append(el("p", "section-label", hint.category));
   const swap = el("p", "swap");
   swap.append(
-    el("span", "from", entry.from),
+    el("span", "from", hint.span),
     document.createTextNode("  →  "),
-    el("span", "to", entry.to)
+    el("span", "to", hint.suggestion)
   );
   card.append(swap);
-  card.append(el("p", "why", entry.why));
-  card.append(
-    cardActions(card, entry, () => replaceOnce(state.field, entry.from, entry.to))
-  );
-  return card;
+  card.append(el("p", "why", hint.why));
+  const apply = () => replaceOnce(state.field, hint.span, hint.suggestion);
+  card.append(cardActions(card, hint, apply));
+  return { card, hint, apply };
+}
+
+/** Apply the first hint on screen. A second call within a moment is ignored, so the key and the command cannot both land. */
+function applyFirstHint() {
+  const now = Date.now();
+  if (now - lastApplyAt < 400) return false;
+  const first = openHints[0];
+  if (!first) return false;
+  lastApplyAt = now;
+
+  const { ok, method } = first.apply();
+  if (!ok) {
+    first.card.append(
+      el("p", "footnote", "That wording is no longer in the field, so nothing was changed.")
+    );
+    return false;
+  }
+  if (method && method !== "exact") {
+    console.log(`Redraft: matched the excerpt by ${method}.`);
+  }
+  reportOutcome(first.hint, "applied");
+  retire(first.card);
+  return true;
 }
 
 function showCoach(result) {
-  if (result.noChangesNeeded) {
-    showMessage("This already does what it set out to do.");
+  if (result.noChangesNeeded || !result.hints?.length) {
+    const rejected = result.rejected?.length ?? 0;
+    showMessage(
+      rejected
+        ? "The only changes on offer were rewrites, or they missed your words, so nothing is shown."
+        : "This already does what it set out to do."
+    );
     return;
   }
 
+  // panel() opens the widget, and opening clears openHints. Record the hints
+  // after that, or the keybind would find an empty list.
+  const built = result.hints.map(hintCard);
   const body = el("div", "body");
-
-  if (result.suggestions.length) {
-    body.append(el("p", "section-label", "Suggestions"));
-    for (const suggestion of result.suggestions) {
-      body.append(suggestionCard(suggestion));
-    }
-  }
-
-  if (result.vocabulary.length) {
-    body.append(el("p", "section-label", "Vocabulary"));
-    for (const entry of result.vocabulary) {
-      body.append(vocabularyCard(entry));
-    }
-  }
+  for (const item of built) body.append(item.card);
+  body.append(
+    el(
+      "p",
+      "footnote",
+      "Ctrl+Shift+L applies the first hint. Nothing in the field changes until you apply one."
+    )
+  );
 
   panel([header(metaLine()), body]);
+  openHints.length = 0;
+  openHints.push(...built);
 }
 
 function showRewrite(result) {
@@ -926,7 +946,7 @@ function showRewrite(result) {
 /** How many separate things a result offers the writer. */
 function suggestionCount(result) {
   if (result.mode === "rewrite") return result.text?.trim() ? 1 : 0;
-  return (result.suggestions?.length ?? 0) + (result.vocabulary?.length ?? 0);
+  return result.hints?.length ?? 0;
 }
 
 function render(original, result, scope) {
@@ -1050,6 +1070,13 @@ function offer(field, key, original, result, scope) {
 function onMessage(message, sender, sendResponse) {
   if (!sessionAlive()) {
     endSession();
+    return;
+  }
+
+  if (message?.type === "REDRAFT_APPLY") {
+    if (!openHints.length) return;
+    applyFirstHint();
+    sendResponse({ ok: true });
     return;
   }
 
@@ -1187,6 +1214,19 @@ function onFocusIn(event) {
   scheduleAnalysis();
 }
 
+function onApplyKey(event) {
+  if (!sessionAlive()) {
+    endSession();
+    return;
+  }
+  const key = typeof event.key === "string" ? event.key.toLowerCase() : "";
+  if (key !== "l" || event.altKey) return;
+  if (!(event.ctrlKey || event.metaKey) || !event.shiftKey) return;
+  if (!openHints.length) return;
+  event.preventDefault();
+  applyFirstHint();
+}
+
 function onEnter(event) {
   if (!sessionAlive()) {
     endSession();
@@ -1254,6 +1294,7 @@ function endSession() {
   document.removeEventListener("compositionend", onInput, true);
   document.removeEventListener("focusin", onFocusIn, true);
   document.removeEventListener("keydown", onEnter, true);
+  document.removeEventListener("keydown", onApplyKey, true);
   document.removeEventListener("selectionchange", onSelectionChange);
   for (const undo of viewportUndos) undo();
   viewportUndos.length = 0;
@@ -1286,6 +1327,7 @@ document.addEventListener("input", onInput, true);
 document.addEventListener("compositionend", onInput, true);
 document.addEventListener("focusin", onFocusIn, true);
 document.addEventListener("keydown", onEnter, true);
+document.addEventListener("keydown", onApplyKey, true);
 document.addEventListener("selectionchange", onSelectionChange);
 bindViewport();
 })();

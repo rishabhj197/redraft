@@ -1,6 +1,6 @@
 # Redraft
 
-Redraft is a Chrome extension that rewrites your text in place, inside whatever box you're already typing in — Gmail, LinkedIn, Slack, GitHub. It exists because a page you paste text into is just Claude with a system prompt; the point of Redraft is that it lives where the writing already happens.
+Redraft is a Chrome extension that hints at a better word while you are already writing — Gmail and Notion are the pages to try. It does not hand you a finished rewrite. A hint is a short span of your own text, a word or phrase you might use instead, and a one-line reason. You apply the ones you want. The point is that the lesson shows up later, in your own sentences.
 
 > "Avoid using the word 'very' because it's lazy. A man is not very tired, he is exhausted. Don't use very sad, use morose."
 > — John Keating, *Dead Poets Society* (1989)

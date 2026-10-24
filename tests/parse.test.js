@@ -36,19 +36,18 @@ function ok(text, usage) {
 
 const COACH_PAYLOAD = {
   noChangesNeeded: false,
-  suggestions: [
+  hints: [
     {
-      excerpt: "very productive",
-      issue: 'An intensifier stands in for the word that would say it.',
-      fix: "fruitful",
+      span: "very productive",
+      suggestion: "fruitful",
       why: "Names the quality rather than gesturing at its size.",
+      category: "precision",
     },
-  ],
-  vocabulary: [
     {
-      from: "proceed",
-      to: "press on",
+      span: "proceed",
+      suggestion: "press on",
       why: "Carries the effort of continuing, which proceed does not.",
+      category: "vocabulary",
     },
   ],
 };
@@ -148,10 +147,10 @@ describe("response parsing — coach mode", () => {
 
     assert.equal(result.mode, "coach");
     assert.equal(result.noChangesNeeded, false);
-    assert.equal(result.suggestions.length, 1);
-    assert.equal(result.suggestions[0].excerpt, "very productive");
-    assert.equal(result.vocabulary.length, 1);
-    assert.equal(result.vocabulary[0].to, "press on");
+    assert.equal(result.hints.length, 2);
+    assert.equal(result.hints[0].span, "very productive");
+    assert.equal(result.hints[0].category, "precision");
+    assert.equal(result.hints[1].suggestion, "press on");
     assert.equal(result.promptVersion, "v2");
     assert.equal(result.model, "claude-haiku-4-5-20251001");
     assert.deepEqual(result.usage, USAGE);
@@ -159,13 +158,12 @@ describe("response parsing — coach mode", () => {
 
   test("noChangesNeeded: true with empty arrays is valid, not an error", () => {
     const result = parseResponse(
-      ok(JSON.stringify({ noChangesNeeded: true, suggestions: [], vocabulary: [] })),
+      ok(JSON.stringify({ noChangesNeeded: true, hints: [] })),
       COACH_META
     );
 
     assert.equal(result.noChangesNeeded, true);
-    assert.deepEqual(result.suggestions, []);
-    assert.deepEqual(result.vocabulary, []);
+    assert.deepEqual(result.hints, []);
     assert.equal(result.promptVersion, "v2");
     assert.equal(result.model, "claude-haiku-4-5-20251001");
   });
@@ -173,33 +171,31 @@ describe("response parsing — coach mode", () => {
   test("a fenced payload is unwrapped rather than failed", () => {
     const fenced = "```json\n" + JSON.stringify(COACH_PAYLOAD) + "\n```";
     const result = parseResponse(ok(fenced), COACH_META);
-    assert.equal(result.suggestions.length, 1);
+    assert.equal(result.hints.length, 2);
   });
 
-  test("missing arrays default to empty and imply nothing to change", () => {
+  test("a missing hint list defaults to empty and implies nothing to change", () => {
     const result = parseResponse(ok(JSON.stringify({ noChangesNeeded: true })), COACH_META);
     assert.equal(result.noChangesNeeded, true);
-    assert.deepEqual(result.suggestions, []);
-    assert.deepEqual(result.vocabulary, []);
+    assert.deepEqual(result.hints, []);
   });
 
   test('"changes needed" with nothing to show is read as nothing to change', () => {
     const result = validateCoachPayload({
       noChangesNeeded: false,
-      suggestions: [],
-      vocabulary: [],
+      hints: [],
     });
     assert.equal(result.noChangesNeeded, true);
   });
 
-  test("vocabulary alone is enough to mean changes are needed", () => {
+  test("a single hint is enough to mean changes are needed", () => {
     const result = validateCoachPayload({
       noChangesNeeded: false,
-      suggestions: [],
-      vocabulary: COACH_PAYLOAD.vocabulary,
+      hints: [COACH_PAYLOAD.hints[1]],
     });
     assert.equal(result.noChangesNeeded, false);
-    assert.equal(result.vocabulary.length, 1);
+    assert.equal(result.hints.length, 1);
+    assert.equal(result.hints[0].category, "vocabulary");
   });
 });
 
@@ -208,49 +204,39 @@ describe("coach payload validation", () => {
     ["a bare array", []],
     ["a string", "no changes"],
     ["null", null],
-    ["a missing noChangesNeeded", { suggestions: [], vocabulary: [] }],
+    ["a missing noChangesNeeded", { hints: [] }],
     [
       "a non-boolean noChangesNeeded",
-      { noChangesNeeded: "false", suggestions: [], vocabulary: [] },
+      { noChangesNeeded: "false", hints: [] },
     ],
+    ["hints that are not an array", { noChangesNeeded: false, hints: {} }],
     [
-      "suggestions that are not an array",
-      { noChangesNeeded: false, suggestions: {}, vocabulary: [] },
-    ],
-    [
-      "vocabulary that is not an array",
-      { noChangesNeeded: false, suggestions: [], vocabulary: "none" },
-    ],
-    [
-      "a suggestion missing why",
+      "a hint missing why",
       {
         noChangesNeeded: false,
-        suggestions: [{ excerpt: "a", issue: "b", fix: "c" }],
-        vocabulary: [],
+        hints: [{ span: "a", suggestion: "b", category: "vocabulary" }],
       },
     ],
     [
-      "a suggestion with an empty excerpt",
+      "a hint with an empty span",
       {
         noChangesNeeded: false,
-        suggestions: [{ excerpt: "", issue: "b", fix: "c", why: "d" }],
-        vocabulary: [],
+        hints: [{ span: "", suggestion: "b", why: "c", category: "vocabulary" }],
       },
     ],
     [
-      "a suggestion that is not an object",
-      { noChangesNeeded: false, suggestions: ["cut the intensifier"], vocabulary: [] },
+      "a hint that is not an object",
+      { noChangesNeeded: false, hints: ["cut the intensifier"] },
     ],
     [
-      "a vocabulary entry missing to",
+      "a hint with an unknown category",
       {
         noChangesNeeded: false,
-        suggestions: [],
-        vocabulary: [{ from: "big", why: "more exact" }],
+        hints: [{ span: "big", suggestion: "vast", why: "more exact", category: "tone" }],
       },
     ],
     [
-      "noChangesNeeded: true alongside actual changes",
+      "noChangesNeeded: true alongside actual hints",
       { ...COACH_PAYLOAD, noChangesNeeded: true },
     ],
   ];

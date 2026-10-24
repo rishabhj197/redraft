@@ -183,12 +183,18 @@ chrome.runtime.onInstalled.addListener(() => {
 });
 
 chrome.commands.onCommand.addListener((command) => {
-  if (command !== "trigger-redraft") return;
+  const type =
+    command === "trigger-redraft"
+      ? "REDRAFT_CAPTURE"
+      : command === "apply-hint"
+        ? "REDRAFT_APPLY"
+        : null;
+  if (!type) return;
 
   chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
     const tab = tabs[0];
     if (!tab?.id) return;
-    sendToTab(tab.id, { type: "REDRAFT_CAPTURE" });
+    sendToTab(tab.id, { type });
   });
 });
 

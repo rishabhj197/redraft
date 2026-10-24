@@ -17,13 +17,15 @@ const budgetLine = document.getElementById("budget-line");
 const resetBudgetButton = document.getElementById("reset-budget");
 
 const MODE_LABELS = {
-  coach: "Coach — tell me what to change",
-  rewrite: "Rewrite — just fix it",
+  coach: "Hints — a better word, and why",
+  rewrite: "Rewrite — a finished line",
 };
 
 const MODE_HINTS = {
-  coach: "Redraft says what to change and why. You make the edit, so the words stay yours.",
-  rewrite: "Redraft returns the rewritten line. Faster, and useful for throwaway text.",
+  coach:
+    "Redraft offers a word or a short phrase, and a reason. You apply the one you want. The sentence stays yours.",
+  rewrite:
+    "Redraft returns a finished line. Kept for throwaway text. It is not the point of the tool.",
 };
 
 const STYLE_LABELS = {
