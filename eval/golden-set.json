@@ -1,0 +1,338 @@
+{
+  "version": 1,
+  "promptVersion": "v3",
+  "notes": "Hand-written fixtures prove the pipeline. They are not a model score. Run with --live to score the model. Do not edit the prompt to chase the heldOut split.",
+  "cases": [
+    {
+      "id": "keating-very-tired",
+      "split": "dev",
+      "style": "classic",
+      "source": "I am very tired after the flight.",
+      "expect": {
+        "mayBeEmpty": false,
+        "wantedCategories": ["vocabulary", "precision"],
+        "preserve": [],
+        "note": "very tired should draw a more exact word, not a rewritten sentence."
+      },
+      "fixture": {
+        "noChangesNeeded": false,
+        "hints": [
+          {
+            "span": "very tired",
+            "suggestion": "exhausted",
+            "why": "Names the state, which very tired only gestures at.",
+            "category": "vocabulary"
+          }
+        ]
+      }
+    },
+    {
+      "id": "keating-very-sad",
+      "split": "dev",
+      "style": "warm",
+      "source": "She looked very sad when she read the letter.",
+      "expect": {
+        "mayBeEmpty": false,
+        "wantedCategories": ["vocabulary", "precision"],
+        "preserve": [],
+        "note": "The Keating move: name the sadness."
+      },
+      "fixture": {
+        "noChangesNeeded": false,
+        "hints": [
+          {
+            "span": "very sad",
+            "suggestion": "morose",
+            "why": "Names the mood, which very sad only sizes.",
+            "category": "vocabulary"
+          }
+        ]
+      }
+    },
+    {
+      "id": "question-quite-sure",
+      "split": "dev",
+      "style": "classic",
+      "source": "Are you quite sure this is the right room?",
+      "expect": {
+        "mayBeEmpty": false,
+        "wantedCategories": ["precision", "vocabulary"],
+        "preserve": [],
+        "note": "A question is a finished thought. The hint stays on the weak phrase."
+      },
+      "fixture": {
+        "noChangesNeeded": false,
+        "hints": [
+          {
+            "span": "quite sure",
+            "suggestion": "certain",
+            "why": "Certain is a yes or a no. Quite sure is a shrug.",
+            "category": "precision"
+          }
+        ]
+      }
+    },
+    {
+      "id": "already-adjourned",
+      "split": "dev",
+      "style": "classic",
+      "source": "The committee adjourned at dusk.",
+      "expect": {
+        "mayBeEmpty": true,
+        "wantedCategories": [],
+        "preserve": [],
+        "note": "Already exact. An empty answer is a pass."
+      },
+      "fixture": {
+        "noChangesNeeded": true,
+        "hints": []
+      }
+    },
+    {
+      "id": "nice-evening",
+      "split": "dev",
+      "style": "warm",
+      "source": "It was a nice evening and the talk was good.",
+      "expect": {
+        "mayBeEmpty": false,
+        "wantedCategories": ["ornament", "precision", "vocabulary"],
+        "preserve": [],
+        "note": "nice is dull. The replacement should be vivid without becoming purple."
+      },
+      "fixture": {
+        "noChangesNeeded": false,
+        "hints": [
+          {
+            "span": "nice",
+            "suggestion": "mellow",
+            "why": "Says the evening was soft, which nice does not.",
+            "category": "ornament"
+          }
+        ]
+      }
+    },
+    {
+      "id": "kind-of-need",
+      "split": "dev",
+      "style": "plain",
+      "source": "The thing is that we kind of need to start soon.",
+      "expect": {
+        "mayBeEmpty": false,
+        "wantedCategories": ["precision", "rhythm"],
+        "preserve": [],
+        "note": "A hedge in the middle of the line, not a reason to rewrite the sentence."
+      },
+      "fixture": {
+        "noChangesNeeded": false,
+        "hints": [
+          {
+            "span": "kind of need",
+            "suggestion": "have",
+            "why": "Drops the hedge and names the obligation.",
+            "category": "precision"
+          }
+        ]
+      }
+    },
+    {
+      "id": "maybe-postpone",
+      "split": "dev",
+      "style": "classic",
+      "source": "I think we should maybe postpone the launch.",
+      "expect": {
+        "mayBeEmpty": false,
+        "wantedCategories": ["precision"],
+        "preserve": [],
+        "note": "Classic refuses the stance of hedging. The hint is still local."
+      },
+      "fixture": {
+        "noChangesNeeded": false,
+        "hints": [
+          {
+            "span": "should maybe",
+            "suggestion": "will",
+            "why": "A decision, not a possibility the writer is backing away from.",
+            "category": "precision"
+          }
+        ]
+      }
+    },
+    {
+      "id": "names-stay",
+      "split": "dev",
+      "style": "warm",
+      "source": "Priya told Amir the train leaves at six.",
+      "expect": {
+        "mayBeEmpty": false,
+        "wantedCategories": ["vocabulary", "precision"],
+        "preserve": ["Priya", "Amir"],
+        "note": "Names and the fact of six o'clock stay. Only a verb is in play."
+      },
+      "fixture": {
+        "noChangesNeeded": false,
+        "hints": [
+          {
+            "span": "leaves",
+            "suggestion": "departs",
+            "why": "The slightly heavier word for a timetable, which leaves is a touch loose for.",
+            "category": "vocabulary"
+          }
+        ]
+      }
+    },
+    {
+      "id": "not-more-purple",
+      "split": "dev",
+      "style": "plain",
+      "source": "The vibrant tapestry of the trip leveraged a pivotal moment.",
+      "expect": {
+        "mayBeEmpty": false,
+        "wantedCategories": ["precision", "vocabulary"],
+        "preserve": [],
+        "note": "The line is already overdressed. A hint should sharpen one word, not add another flourish."
+      },
+      "fixture": {
+        "noChangesNeeded": false,
+        "hints": [
+          {
+            "span": "pivotal",
+            "suggestion": "decisive",
+            "why": "Decisive says the moment settled something. Pivotal only announces importance.",
+            "category": "precision"
+          }
+        ]
+      }
+    },
+    {
+      "id": "actually-won",
+      "split": "dev",
+      "style": "warm",
+      "source": "We actually won the match!",
+      "expect": {
+        "mayBeEmpty": false,
+        "wantedCategories": ["precision", "rhythm"],
+        "preserve": [],
+        "note": "An exclamation is a finished thought. actually is the slack word."
+      },
+      "fixture": {
+        "noChangesNeeded": false,
+        "hints": [
+          {
+            "span": "actually won",
+            "suggestion": "won",
+            "why": "The win does not need a drumroll in front of it.",
+            "category": "rhythm"
+          }
+        ]
+      }
+    },
+    {
+      "id": "and-then",
+      "split": "dev",
+      "style": "classic",
+      "source": "We met, we talked, and then we left, and then we wrote it up.",
+      "expect": {
+        "mayBeEmpty": false,
+        "wantedCategories": ["rhythm", "precision"],
+        "preserve": [],
+        "note": "Rhythm is a shorter cadence, still not a new sentence."
+      },
+      "fixture": {
+        "noChangesNeeded": false,
+        "hints": [
+          {
+            "span": "and then we left, and then we wrote it up",
+            "suggestion": "then left and wrote it up",
+            "why": "One cadence, instead of two identical steps.",
+            "category": "rhythm"
+          }
+        ]
+      }
+    },
+    {
+      "id": "heldout-quite-long",
+      "split": "heldOut",
+      "style": "plain",
+      "source": "The report was quite long and really useful for the board.",
+      "expect": {
+        "mayBeEmpty": false,
+        "wantedCategories": ["vocabulary", "precision"],
+        "preserve": [],
+        "note": "Held out. Two intensifiers. Do not tune the prompt against this case."
+      },
+      "fixture": {
+        "noChangesNeeded": false,
+        "hints": [
+          {
+            "span": "quite long",
+            "suggestion": "lengthy",
+            "why": "Lengthy is the length. Quite long is a guess at it.",
+            "category": "vocabulary"
+          }
+        ]
+      }
+    },
+    {
+      "id": "heldout-rain",
+      "split": "heldOut",
+      "style": "classic",
+      "source": "Rain stalled the match after tea.",
+      "expect": {
+        "mayBeEmpty": true,
+        "wantedCategories": [],
+        "preserve": [],
+        "note": "Held out. Already exact, in the register of a match report. Empty is a pass."
+      },
+      "fixture": {
+        "noChangesNeeded": true,
+        "hints": []
+      }
+    },
+    {
+      "id": "heldout-big-meeting",
+      "split": "heldOut",
+      "style": "warm",
+      "source": "We have a big meeting on Monday about the budget.",
+      "expect": {
+        "mayBeEmpty": false,
+        "wantedCategories": ["precision", "vocabulary"],
+        "preserve": ["Monday"],
+        "note": "Held out. big is the slack word. Monday and the budget stay."
+      },
+      "fixture": {
+        "noChangesNeeded": false,
+        "hints": [
+          {
+            "span": "big",
+            "suggestion": "long",
+            "why": "Says the meeting takes time, which big does not.",
+            "category": "precision"
+          }
+        ]
+      }
+    },
+    {
+      "id": "heldout-just-say",
+      "split": "heldOut",
+      "style": "warm",
+      "source": "I wanted to just say that the draft is ready.",
+      "expect": {
+        "mayBeEmpty": false,
+        "wantedCategories": ["precision", "rhythm"],
+        "preserve": [],
+        "note": "Held out. A throat-clearing phrase, replaced locally."
+      },
+      "fixture": {
+        "noChangesNeeded": false,
+        "hints": [
+          {
+            "span": "just say",
+            "suggestion": "say",
+            "why": "The readiness does not need a preface.",
+            "category": "rhythm"
+          }
+        ]
+      }
+    }
+  ]
+}

@@ -5,6 +5,7 @@
   "description": "Redraft — improves your writing in the box where you're already writing it.",
   "type": "module",
   "scripts": {
-    "test": "node --test"
+    "test": "node --test",
+    "eval": "node eval/run-evals.js"
   }
 }

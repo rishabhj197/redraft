@@ -76,6 +76,11 @@ describe("hint guards", () => {
     assert.ok(problems.includes("span-too-long"));
   });
 
+  test("an unknown category is refused", () => {
+    const problems = hintProblems(SOURCE, hint({ category: "tone" }));
+    assert.ok(problems.includes("bad-category"));
+  });
+
   test("a hint that changes nothing is refused", () => {
     const problems = hintProblems(SOURCE, hint({ span: "very tired", suggestion: "Very Tired" }));
     assert.ok(problems.includes("no-change"));
