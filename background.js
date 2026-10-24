@@ -6,9 +6,11 @@ import { DEFAULT_MODEL, isKnownModel } from "./lib/request.js";
 import { DEFAULT_MODE, DEFAULT_STYLE, MODES, STYLES } from "./lib/prompts.js";
 import { addSpend, budgetSummary } from "./lib/budget.js";
 import { recordEvent } from "./lib/events.js";
+import { addToLexicon, entryFromHint } from "./lib/lexicon.js";
 
 const SPEND_KEY = "budgetSpentUsd";
 const EVENTS_KEY = "redraftEvents";
+const LEXICON_KEY = "redraftLexicon";
 
 function storageGet(keys) {
   return new Promise((resolve) => chrome.storage.local.get(keys, resolve));
@@ -211,5 +213,21 @@ chrome.runtime.onMessage.addListener((message, sender) => {
     recordEvent(message.payload, chromeEventStore).catch((error) =>
       console.log("Redraft: could not record feedback event.", error.message)
     );
+    rememberLexicon(message.payload).catch((error) =>
+      console.log("Redraft: could not update the lexicon.", error.message)
+    );
   }
 });
+
+// Applied hints only. A rewrite of the whole draft is not a word to learn.
+async function rememberLexicon(payload) {
+  if (payload?.outcome !== "applied") return;
+  const entry = entryFromHint(payload.suggestion, {
+    style: payload.style ?? null,
+    timestamp: new Date().toISOString(),
+  });
+  if (!entry) return;
+  const stored = await storageGet([LEXICON_KEY]);
+  const entries = Array.isArray(stored[LEXICON_KEY]) ? stored[LEXICON_KEY] : [];
+  await storageSet({ [LEXICON_KEY]: addToLexicon(entries, entry) });
+}
