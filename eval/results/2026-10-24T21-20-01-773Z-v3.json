@@ -1,0 +1,651 @@
+{
+  "schema": "redraft.evalReport.v1",
+  "promptVersion": "v3",
+  "model": "fixture",
+  "mode": "coach",
+  "source": "fixture",
+  "ranAt": "2026-10-24T21:20:01.773Z",
+  "disclaimer": "Pipeline check on hand-written fixtures. Not a model score.",
+  "summary": {
+    "cases": 15,
+    "scored": 15,
+    "notRun": 0,
+    "errors": 0,
+    "hardPass": 15,
+    "hardFail": 0,
+    "passRate": 1,
+    "bySplit": {
+      "dev": {
+        "cases": 11,
+        "scored": 11,
+        "notRun": 0,
+        "errors": 0,
+        "hardPass": 11,
+        "hardFail": 0,
+        "passRate": 1,
+        "judgeMean": null
+      },
+      "heldOut": {
+        "cases": 4,
+        "scored": 4,
+        "notRun": 0,
+        "errors": 0,
+        "hardPass": 4,
+        "hardFail": 0,
+        "passRate": 1,
+        "judgeMean": null
+      }
+    },
+    "byCategory": {
+      "vocabulary": 4,
+      "precision": 5,
+      "ornament": 1,
+      "rhythm": 3
+    },
+    "judge": {
+      "status": "skipped",
+      "reason": "Pass --judge with ANTHROPIC_API_KEY to score voice and hint quality.",
+      "rubricVersion": "v1",
+      "mean": null,
+      "bySplit": {
+        "dev": null,
+        "heldOut": null
+      }
+    },
+    "humanPreference": {
+      "status": "not-joined",
+      "accepted": null,
+      "dismissed": null,
+      "note": "Applied and dismissed hints are stored on the extension, with the prompt version. Joining them to this report is the online half. A seed run leaves the counts empty on purpose."
+    }
+  },
+  "regression": {
+    "baselineRanAt": null,
+    "baselinePromptVersion": null,
+    "hardPassRateDelta": {
+      "dev": null,
+      "heldOut": null
+    },
+    "judgeMeanDelta": {
+      "dev": null,
+      "heldOut": null
+    },
+    "note": "No earlier report. This run is the baseline."
+  },
+  "changelog": {
+    "promptVersion": "v3",
+    "note": "Coach returns discrete hints: a span, a suggestion, a reason, and a category. Full rewrites, missing spans, and banned flourishes fail the hard checks. Benaud, Tharoor, and Thapar are principles in the prompt, not voices to copy. This is the first prompt the harness scores. v1 and v2 were not.",
+    "hardPassRate": {
+      "dev": 1,
+      "heldOut": 1
+    },
+    "judgeMean": {
+      "dev": null,
+      "heldOut": null
+    },
+    "comparedWith": null
+  },
+  "cases": [
+    {
+      "id": "keating-very-tired",
+      "split": "dev",
+      "style": "classic",
+      "source": "I am very tired after the flight.",
+      "note": "very tired should draw a more exact word, not a rewritten sentence.",
+      "status": "scored",
+      "hints": [
+        {
+          "span": "very tired",
+          "suggestion": "exhausted",
+          "why": "Names the state, which very tired only gestures at.",
+          "category": "vocabulary"
+        }
+      ],
+      "rejected": [],
+      "hard": {
+        "pass": true,
+        "checks": [
+          {
+            "name": "schema",
+            "pass": true,
+            "detail": null
+          },
+          {
+            "name": "hint-0",
+            "pass": true,
+            "detail": "very tired"
+          },
+          {
+            "name": "category",
+            "pass": true,
+            "detail": null
+          }
+        ]
+      },
+      "judge": null
+    },
+    {
+      "id": "keating-very-sad",
+      "split": "dev",
+      "style": "warm",
+      "source": "She looked very sad when she read the letter.",
+      "note": "The Keating move: name the sadness.",
+      "status": "scored",
+      "hints": [
+        {
+          "span": "very sad",
+          "suggestion": "morose",
+          "why": "Names the mood, which very sad only sizes.",
+          "category": "vocabulary"
+        }
+      ],
+      "rejected": [],
+      "hard": {
+        "pass": true,
+        "checks": [
+          {
+            "name": "schema",
+            "pass": true,
+            "detail": null
+          },
+          {
+            "name": "hint-0",
+            "pass": true,
+            "detail": "very sad"
+          },
+          {
+            "name": "category",
+            "pass": true,
+            "detail": null
+          }
+        ]
+      },
+      "judge": null
+    },
+    {
+      "id": "question-quite-sure",
+      "split": "dev",
+      "style": "classic",
+      "source": "Are you quite sure this is the right room?",
+      "note": "A question is a finished thought. The hint stays on the weak phrase.",
+      "status": "scored",
+      "hints": [
+        {
+          "span": "quite sure",
+          "suggestion": "certain",
+          "why": "Certain is a yes or a no. Quite sure is a shrug.",
+          "category": "precision"
+        }
+      ],
+      "rejected": [],
+      "hard": {
+        "pass": true,
+        "checks": [
+          {
+            "name": "schema",
+            "pass": true,
+            "detail": null
+          },
+          {
+            "name": "hint-0",
+            "pass": true,
+            "detail": "quite sure"
+          },
+          {
+            "name": "category",
+            "pass": true,
+            "detail": null
+          }
+        ]
+      },
+      "judge": null
+    },
+    {
+      "id": "already-adjourned",
+      "split": "dev",
+      "style": "classic",
+      "source": "The committee adjourned at dusk.",
+      "note": "Already exact. An empty answer is a pass.",
+      "status": "scored",
+      "hints": [],
+      "rejected": [],
+      "hard": {
+        "pass": true,
+        "checks": [
+          {
+            "name": "schema",
+            "pass": true,
+            "detail": null
+          },
+          {
+            "name": "empty-answer",
+            "pass": true,
+            "detail": "An empty answer is a pass on this case."
+          }
+        ]
+      },
+      "judge": null
+    },
+    {
+      "id": "nice-evening",
+      "split": "dev",
+      "style": "warm",
+      "source": "It was a nice evening and the talk was good.",
+      "note": "nice is dull. The replacement should be vivid without becoming purple.",
+      "status": "scored",
+      "hints": [
+        {
+          "span": "nice",
+          "suggestion": "mellow",
+          "why": "Says the evening was soft, which nice does not.",
+          "category": "ornament"
+        }
+      ],
+      "rejected": [],
+      "hard": {
+        "pass": true,
+        "checks": [
+          {
+            "name": "schema",
+            "pass": true,
+            "detail": null
+          },
+          {
+            "name": "hint-0",
+            "pass": true,
+            "detail": "nice"
+          },
+          {
+            "name": "category",
+            "pass": true,
+            "detail": null
+          }
+        ]
+      },
+      "judge": null
+    },
+    {
+      "id": "kind-of-need",
+      "split": "dev",
+      "style": "plain",
+      "source": "The thing is that we kind of need to start soon.",
+      "note": "A hedge in the middle of the line, not a reason to rewrite the sentence.",
+      "status": "scored",
+      "hints": [
+        {
+          "span": "kind of need",
+          "suggestion": "have",
+          "why": "Drops the hedge and names the obligation.",
+          "category": "precision"
+        }
+      ],
+      "rejected": [],
+      "hard": {
+        "pass": true,
+        "checks": [
+          {
+            "name": "schema",
+            "pass": true,
+            "detail": null
+          },
+          {
+            "name": "hint-0",
+            "pass": true,
+            "detail": "kind of need"
+          },
+          {
+            "name": "category",
+            "pass": true,
+            "detail": null
+          }
+        ]
+      },
+      "judge": null
+    },
+    {
+      "id": "maybe-postpone",
+      "split": "dev",
+      "style": "classic",
+      "source": "I think we should maybe postpone the launch.",
+      "note": "Classic refuses the stance of hedging. The hint is still local.",
+      "status": "scored",
+      "hints": [
+        {
+          "span": "should maybe",
+          "suggestion": "will",
+          "why": "A decision, not a possibility the writer is backing away from.",
+          "category": "precision"
+        }
+      ],
+      "rejected": [],
+      "hard": {
+        "pass": true,
+        "checks": [
+          {
+            "name": "schema",
+            "pass": true,
+            "detail": null
+          },
+          {
+            "name": "hint-0",
+            "pass": true,
+            "detail": "should maybe"
+          },
+          {
+            "name": "category",
+            "pass": true,
+            "detail": null
+          }
+        ]
+      },
+      "judge": null
+    },
+    {
+      "id": "names-stay",
+      "split": "dev",
+      "style": "warm",
+      "source": "Priya told Amir the train leaves at six.",
+      "note": "Names and the fact of six o'clock stay. Only a verb is in play.",
+      "status": "scored",
+      "hints": [
+        {
+          "span": "leaves",
+          "suggestion": "departs",
+          "why": "The slightly heavier word for a timetable, which leaves is a touch loose for.",
+          "category": "vocabulary"
+        }
+      ],
+      "rejected": [],
+      "hard": {
+        "pass": true,
+        "checks": [
+          {
+            "name": "schema",
+            "pass": true,
+            "detail": null
+          },
+          {
+            "name": "hint-0",
+            "pass": true,
+            "detail": "leaves"
+          },
+          {
+            "name": "category",
+            "pass": true,
+            "detail": null
+          },
+          {
+            "name": "preserve-Priya",
+            "pass": true,
+            "detail": null
+          },
+          {
+            "name": "preserve-Amir",
+            "pass": true,
+            "detail": null
+          }
+        ]
+      },
+      "judge": null
+    },
+    {
+      "id": "not-more-purple",
+      "split": "dev",
+      "style": "plain",
+      "source": "The vibrant tapestry of the trip leveraged a pivotal moment.",
+      "note": "The line is already overdressed. A hint should sharpen one word, not add another flourish.",
+      "status": "scored",
+      "hints": [
+        {
+          "span": "pivotal",
+          "suggestion": "decisive",
+          "why": "Decisive says the moment settled something. Pivotal only announces importance.",
+          "category": "precision"
+        }
+      ],
+      "rejected": [],
+      "hard": {
+        "pass": true,
+        "checks": [
+          {
+            "name": "schema",
+            "pass": true,
+            "detail": null
+          },
+          {
+            "name": "hint-0",
+            "pass": true,
+            "detail": "pivotal"
+          },
+          {
+            "name": "category",
+            "pass": true,
+            "detail": null
+          }
+        ]
+      },
+      "judge": null
+    },
+    {
+      "id": "actually-won",
+      "split": "dev",
+      "style": "warm",
+      "source": "We actually won the match!",
+      "note": "An exclamation is a finished thought. actually is the slack word.",
+      "status": "scored",
+      "hints": [
+        {
+          "span": "actually won",
+          "suggestion": "won",
+          "why": "The win does not need a drumroll in front of it.",
+          "category": "rhythm"
+        }
+      ],
+      "rejected": [],
+      "hard": {
+        "pass": true,
+        "checks": [
+          {
+            "name": "schema",
+            "pass": true,
+            "detail": null
+          },
+          {
+            "name": "hint-0",
+            "pass": true,
+            "detail": "actually won"
+          },
+          {
+            "name": "category",
+            "pass": true,
+            "detail": null
+          }
+        ]
+      },
+      "judge": null
+    },
+    {
+      "id": "and-then",
+      "split": "dev",
+      "style": "classic",
+      "source": "We met, we talked, and then we left, and then we wrote it up.",
+      "note": "Rhythm is a shorter cadence, still not a new sentence.",
+      "status": "scored",
+      "hints": [
+        {
+          "span": "and then we left, and then we wrote it up",
+          "suggestion": "then left and wrote it up",
+          "why": "One cadence, instead of two identical steps.",
+          "category": "rhythm"
+        }
+      ],
+      "rejected": [],
+      "hard": {
+        "pass": true,
+        "checks": [
+          {
+            "name": "schema",
+            "pass": true,
+            "detail": null
+          },
+          {
+            "name": "hint-0",
+            "pass": true,
+            "detail": "and then we left, and then we wrote it up"
+          },
+          {
+            "name": "category",
+            "pass": true,
+            "detail": null
+          }
+        ]
+      },
+      "judge": null
+    },
+    {
+      "id": "heldout-quite-long",
+      "split": "heldOut",
+      "style": "plain",
+      "source": "The report was quite long and really useful for the board.",
+      "note": "Held out. Two intensifiers. Do not tune the prompt against this case.",
+      "status": "scored",
+      "hints": [
+        {
+          "span": "quite long",
+          "suggestion": "lengthy",
+          "why": "Lengthy is the length. Quite long is a guess at it.",
+          "category": "vocabulary"
+        }
+      ],
+      "rejected": [],
+      "hard": {
+        "pass": true,
+        "checks": [
+          {
+            "name": "schema",
+            "pass": true,
+            "detail": null
+          },
+          {
+            "name": "hint-0",
+            "pass": true,
+            "detail": "quite long"
+          },
+          {
+            "name": "category",
+            "pass": true,
+            "detail": null
+          }
+        ]
+      },
+      "judge": null
+    },
+    {
+      "id": "heldout-rain",
+      "split": "heldOut",
+      "style": "classic",
+      "source": "Rain stalled the match after tea.",
+      "note": "Held out. Already exact, in the register of a match report. Empty is a pass.",
+      "status": "scored",
+      "hints": [],
+      "rejected": [],
+      "hard": {
+        "pass": true,
+        "checks": [
+          {
+            "name": "schema",
+            "pass": true,
+            "detail": null
+          },
+          {
+            "name": "empty-answer",
+            "pass": true,
+            "detail": "An empty answer is a pass on this case."
+          }
+        ]
+      },
+      "judge": null
+    },
+    {
+      "id": "heldout-big-meeting",
+      "split": "heldOut",
+      "style": "warm",
+      "source": "We have a big meeting on Monday about the budget.",
+      "note": "Held out. big is the slack word. Monday and the budget stay.",
+      "status": "scored",
+      "hints": [
+        {
+          "span": "big",
+          "suggestion": "long",
+          "why": "Says the meeting takes time, which big does not.",
+          "category": "precision"
+        }
+      ],
+      "rejected": [],
+      "hard": {
+        "pass": true,
+        "checks": [
+          {
+            "name": "schema",
+            "pass": true,
+            "detail": null
+          },
+          {
+            "name": "hint-0",
+            "pass": true,
+            "detail": "big"
+          },
+          {
+            "name": "category",
+            "pass": true,
+            "detail": null
+          },
+          {
+            "name": "preserve-Monday",
+            "pass": true,
+            "detail": null
+          }
+        ]
+      },
+      "judge": null
+    },
+    {
+      "id": "heldout-just-say",
+      "split": "heldOut",
+      "style": "warm",
+      "source": "I wanted to just say that the draft is ready.",
+      "note": "Held out. A throat-clearing phrase, replaced locally.",
+      "status": "scored",
+      "hints": [
+        {
+          "span": "just say",
+          "suggestion": "say",
+          "why": "The readiness does not need a preface.",
+          "category": "rhythm"
+        }
+      ],
+      "rejected": [],
+      "hard": {
+        "pass": true,
+        "checks": [
+          {
+            "name": "schema",
+            "pass": true,
+            "detail": null
+          },
+          {
+            "name": "hint-0",
+            "pass": true,
+            "detail": "just say"
+          },
+          {
+            "name": "category",
+            "pass": true,
+            "detail": null
+          }
+        ]
+      },
+      "judge": null
+    }
+  ]
+}

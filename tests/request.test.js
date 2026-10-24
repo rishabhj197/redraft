@@ -64,7 +64,7 @@ describe("request construction", () => {
   test("PROMPT_VERSION and model are carried on the request meta", () => {
     const request = buildRequest(VALID);
     assert.equal(request.meta.promptVersion, PROMPT_VERSION);
-    assert.equal(request.meta.promptVersion, "v2");
+    assert.equal(request.meta.promptVersion, "v3");
     assert.equal(request.meta.model, "claude-sonnet-5");
     assert.equal(request.meta.style, "classic");
     assert.equal(request.meta.mode, "coach");

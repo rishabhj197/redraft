@@ -116,6 +116,30 @@
       .budget.over strong {
         color: #9a2f2f;
       }
+      .lexicon {
+        margin-top: 2.5rem;
+        padding-top: 1.25rem;
+        border-top: 1px solid #e6e0d7;
+      }
+      .lexicon h2 {
+        font-size: 0.95rem;
+        margin: 0;
+      }
+      #lexicon-list {
+        list-style: none;
+        padding: 0;
+        margin: 1rem 0;
+      }
+      #lexicon-list li {
+        padding: 0.65rem 0;
+        border-bottom: 1px solid #efe9e0;
+      }
+      #lexicon-list li:last-child {
+        border-bottom: none;
+      }
+      #lexicon-list strong {
+        font-weight: 600;
+      }
     </style>
   </head>
   <body>
@@ -145,9 +169,11 @@
       <span>Read the draft on its own</span>
     </label>
     <p class="hint">
-      Redraft reads a field once you have stopped typing and finished a
-      sentence, then shows a count near the box. It never opens on its own.
-      Turn this off to work by <kbd>Ctrl+Shift+K</kbd> alone.
+      Redraft reads a field once you pause after a full stop, a question mark,
+      an exclamation, or Enter, then shows a count near the box. It never
+      opens on its own, and it never changes the text on its own.
+      <kbd>Ctrl+Shift+K</kbd> asks for hints. <kbd>Ctrl+Shift+L</kbd> applies
+      the first one. Turn this off to work by the shortcut alone.
     </p>
 
     <div class="actions">
@@ -159,6 +185,16 @@
       <p id="budget-line">Spend so far: —</p>
       <button class="secondary" id="reset-budget">Reset spend counter</button>
     </div>
+
+    <section class="lexicon" id="lexicon">
+      <h2>Your lexicon</h2>
+      <p class="hint">
+        Hints you chose to apply. The aim is that they turn up later, in your own sentences.
+      </p>
+      <ul id="lexicon-list" hidden></ul>
+      <p class="hint" id="lexicon-empty">Nothing here yet. Apply a hint and it will be listed.</p>
+      <button class="secondary" id="clear-lexicon">Clear lexicon</button>
+    </section>
 
     <script type="module" src="options.js"></script>
   </body>

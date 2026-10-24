@@ -6,9 +6,11 @@ import { DEFAULT_MODEL, isKnownModel } from "./lib/request.js";
 import { DEFAULT_MODE, DEFAULT_STYLE, MODES, STYLES } from "./lib/prompts.js";
 import { addSpend, budgetSummary } from "./lib/budget.js";
 import { recordEvent } from "./lib/events.js";
+import { addToLexicon, entryFromHint } from "./lib/lexicon.js";
 
 const SPEND_KEY = "budgetSpentUsd";
 const EVENTS_KEY = "redraftEvents";
+const LEXICON_KEY = "redraftLexicon";
 
 function storageGet(keys) {
   return new Promise((resolve) => chrome.storage.local.get(keys, resolve));
@@ -53,14 +55,52 @@ async function readSettings() {
   };
 }
 
-function sendToTab(tabId, message) {
-  chrome.tabs.sendMessage(tabId, message, () => {
-    if (chrome.runtime.lastError) {
-      console.log(
-        "Redraft: could not reach the content script.",
-        chrome.runtime.lastError.message
-      );
+// Kept in step with manifest.json content_scripts. Reloading the extension
+// leaves the copies already sitting in open tabs orphaned: their chrome.*
+// calls throw, and a top-level const file cannot simply be evaluated again.
+// content.js retires the previous copy when a new one starts, which is what
+// makes injecting these files a second time safe.
+const CONTENT_FILES = ["lib/match.js", "lib/trigger.js", "content.js"];
+
+async function injectContentScripts(tabId) {
+  try {
+    await chrome.scripting.executeScript({
+      target: { tabId, allFrames: true },
+      files: CONTENT_FILES,
+    });
+    return true;
+  } catch (error) {
+    // chrome:// pages, the Web Store, and discarded tabs all refuse injection.
+    console.log("Redraft: could not inject into this tab.", error?.message);
+    return false;
+  }
+}
+
+function injectOpenTabs() {
+  chrome.tabs.query({}, (tabs) => {
+    for (const tab of tabs) {
+      if (tab.id) injectContentScripts(tab.id);
     }
+  });
+}
+
+// One retry. A second failure is reported and left alone — injecting in a
+// loop would thrash every tab that cannot host a content script.
+function sendToTab(tabId, message, attempt = 0) {
+  chrome.tabs.sendMessage(tabId, message, () => {
+    const error = chrome.runtime.lastError;
+    if (!error) return;
+    if (attempt >= 1) {
+      console.log("Redraft: could not reach the content script.", error.message);
+      return;
+    }
+    injectContentScripts(tabId).then((ok) => {
+      if (!ok) {
+        console.log("Redraft: could not reach the content script.", error.message);
+        return;
+      }
+      sendToTab(tabId, message, attempt + 1);
+    });
   });
 }
 
@@ -138,13 +178,25 @@ async function handleRedraftText(tabId, text, requestId) {
   }
 }
 
+chrome.runtime.onInstalled.addListener(() => {
+  // Manifest injection does not reach tabs that were already open, and a
+  // reload orphans the scripts those tabs still have. Put a fresh copy in.
+  injectOpenTabs();
+});
+
 chrome.commands.onCommand.addListener((command) => {
-  if (command !== "trigger-redraft") return;
+  const type =
+    command === "trigger-redraft"
+      ? "REDRAFT_CAPTURE"
+      : command === "apply-hint"
+        ? "REDRAFT_APPLY"
+        : null;
+  if (!type) return;
 
   chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
     const tab = tabs[0];
     if (!tab?.id) return;
-    sendToTab(tab.id, { type: "REDRAFT_CAPTURE" });
+    sendToTab(tab.id, { type });
   });
 });
 
@@ -161,5 +213,21 @@ chrome.runtime.onMessage.addListener((message, sender) => {
     recordEvent(message.payload, chromeEventStore).catch((error) =>
       console.log("Redraft: could not record feedback event.", error.message)
     );
+    rememberLexicon(message.payload).catch((error) =>
+      console.log("Redraft: could not update the lexicon.", error.message)
+    );
   }
 });
+
+// Applied hints only. A rewrite of the whole draft is not a word to learn.
+async function rememberLexicon(payload) {
+  if (payload?.outcome !== "applied") return;
+  const entry = entryFromHint(payload.suggestion, {
+    style: payload.style ?? null,
+    timestamp: new Date().toISOString(),
+  });
+  if (!entry) return;
+  const stored = await storageGet([LEXICON_KEY]);
+  const entries = Array.isArray(stored[LEXICON_KEY]) ? stored[LEXICON_KEY] : [];
+  await storageSet({ [LEXICON_KEY]: addToLexicon(entries, entry) });
+}

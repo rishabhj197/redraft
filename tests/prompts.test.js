@@ -19,11 +19,12 @@ const BASE_RULE_MARKERS = {
   keating: [/\bvery\b/i, /intensifier/i, /exhausted/i, /keating/i],
   vocabulary: [/exact word/i, /less common/i, /rarer word/i, /quota/i],
   preservation: [/\bpreservation\b/i, /formatting/i, /line breaks/i, /proper nouns/i],
+  balance: [/ostentatious/i, /bare plainness/i, /earns its place/i],
 };
 
 describe("prompt assembly", () => {
-  test("PROMPT_VERSION is v2", () => {
-    assert.equal(PROMPT_VERSION, "v2");
+  test("PROMPT_VERSION is v3", () => {
+    assert.equal(PROMPT_VERSION, "v3");
   });
 
   test("every style, in every mode, carries every BASE rule verbatim", () => {
@@ -48,6 +49,8 @@ describe("prompt assembly", () => {
     assert.match(BASE_BLOCK, /If no such word applies, offer none/i);
     assert.match(BASE_BLOCK, /Never reach for a rarer word for effect/i);
     assert.match(BASE_BLOCK, /Keep the writer's meaning, their names, their facts, and their formatting/i);
+    assert.match(BASE_BLOCK, /Never be ostentatious, and never strip the writing to bare plainness/i);
+    assert.match(BASE_BLOCK, /where it earns its place/i);
   });
 
   test("no style block restates a BASE rule", () => {
@@ -138,17 +141,16 @@ describe("prompt assembly", () => {
     }
   });
 
-  test("Coach mode states the JSON contract and blesses the empty answer", () => {
+  test("Coach mode states the hint contract and blesses the empty answer", () => {
     const coach = MODE_BLOCKS.coach;
     assert.match(coach, /Return one JSON object and nothing else/i);
     assert.match(coach, /"noChangesNeeded"/);
-    assert.match(coach, /"suggestions"/);
-    assert.match(coach, /"vocabulary"/);
-    for (const field of ["excerpt", "issue", "fix", "why"]) {
+    assert.match(coach, /"hints"/);
+    for (const field of ["span", "suggestion", "why", "category"]) {
       assert.match(coach, new RegExp(`"${field}"`));
     }
-    for (const field of ["from", "to", "why"]) {
-      assert.match(coach, new RegExp(`"${field}"`));
+    for (const category of ["vocabulary", "precision", "rhythm", "ornament"]) {
+      assert.match(coach, new RegExp(`"${category}"`));
     }
     assert.match(
       coach,
@@ -156,6 +158,12 @@ describe("prompt assembly", () => {
       "Coach must say an empty answer is desirable, not an error"
     );
     assert.match(coach, /You do not rewrite the text/i);
+    assert.match(coach, /never a rewritten sentence/i);
+    assert.match(coach, /principles, not an imitation/i);
+    assert.match(coach, /Richie Benaud/);
+    assert.match(coach, /Shashi Tharoor/);
+    assert.match(coach, /Karan Thapar/);
+    assert.match(coach, /Never the whole sentence/i);
   });
 
   test("Rewrite mode asks for the text and nothing else", () => {

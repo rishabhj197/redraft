@@ -21,15 +21,14 @@ const CALL = {
 
 const COACH_JSON = JSON.stringify({
   noChangesNeeded: false,
-  suggestions: [
+  hints: [
     {
-      excerpt: "very productive",
-      issue: "An intensifier stands in for the word that would say it.",
-      fix: "fruitful",
+      span: "very productive",
+      suggestion: "fruitful",
       why: "Names the quality instead of gesturing at its size.",
+      category: "precision",
     },
   ],
-  vocabulary: [],
 });
 
 // Every test here mocks fetch. No test in this suite makes a real API call.
@@ -88,10 +87,11 @@ describe("runRedraft — happy path", () => {
     assert.match(sent.system, /Target style — Plain/);
     assert.match(sent.system, /Mode — Coach/);
 
-    assert.equal(result.suggestions.length, 1);
-    assert.equal(result.promptVersion, "v2");
+    assert.equal(result.hints.length, 1);
+    assert.equal(result.hints[0].suggestion, "fruitful");
+    assert.equal(result.promptVersion, "v3");
     assert.equal(result.model, "claude-haiku-4-5-20251001");
-    assert.equal(meta.promptVersion, "v2");
+    assert.equal(meta.promptVersion, "v3");
 
     assert.equal(costUsd, 0.0035);
     assert.equal(after.spentUsd, 0.0035);
@@ -112,7 +112,7 @@ describe("runRedraft — happy path", () => {
 
   test("a noChangesNeeded response is a success, not an error", async () => {
     const body = messageBody(
-      JSON.stringify({ noChangesNeeded: true, suggestions: [], vocabulary: [] })
+      JSON.stringify({ noChangesNeeded: true, hints: [] })
     );
     const { result } = await runRedraft(CALL, {
       fetch: mockFetch(body),
@@ -120,7 +120,7 @@ describe("runRedraft — happy path", () => {
     });
 
     assert.equal(result.noChangesNeeded, true);
-    assert.deepEqual(result.suggestions, []);
+    assert.deepEqual(result.hints, []);
   });
 });
 

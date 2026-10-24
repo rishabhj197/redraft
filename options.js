@@ -15,15 +15,22 @@ const status = document.getElementById("status");
 const budgetBlock = document.getElementById("budget");
 const budgetLine = document.getElementById("budget-line");
 const resetBudgetButton = document.getElementById("reset-budget");
+const lexiconList = document.getElementById("lexicon-list");
+const lexiconEmpty = document.getElementById("lexicon-empty");
+const clearLexiconButton = document.getElementById("clear-lexicon");
+
+const LEXICON_KEY = "redraftLexicon";
 
 const MODE_LABELS = {
-  coach: "Coach — tell me what to change",
-  rewrite: "Rewrite — just fix it",
+  coach: "Hints — a better word, and why",
+  rewrite: "Rewrite — a finished line",
 };
 
 const MODE_HINTS = {
-  coach: "Redraft says what to change and why. You make the edit, so the words stay yours.",
-  rewrite: "Redraft returns the rewritten line. Faster, and useful for throwaway text.",
+  coach:
+    "Redraft offers a word or a short phrase, and a reason. You apply the one you want. The sentence stays yours.",
+  rewrite:
+    "Redraft returns a finished line. Kept for throwaway text. It is not the point of the tool.",
 };
 
 const STYLE_LABELS = {
@@ -84,9 +91,37 @@ function flash(text) {
   }, 2000);
 }
 
+function formatWhen(timestamp) {
+  const date = new Date(timestamp);
+  if (Number.isNaN(date.getTime())) return "";
+  return date.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+}
+
+function renderLexicon(entries) {
+  const items = Array.isArray(entries) ? entries : [];
+  lexiconList.replaceChildren(
+    ...items.map((entry) => {
+      const li = document.createElement("li");
+      const word = document.createElement("strong");
+      word.textContent = entry.to;
+      li.append(word, document.createTextNode(` for ${entry.from}`));
+      const meta = document.createElement("div");
+      meta.className = "hint";
+      meta.textContent = [entry.category, entry.why, formatWhen(entry.timestamp)]
+        .filter(Boolean)
+        .join(" · ");
+      li.append(meta);
+      return li;
+    })
+  );
+  const empty = items.length === 0;
+  lexiconList.hidden = empty;
+  lexiconEmpty.hidden = !empty;
+}
+
 function loadSaved() {
   chrome.storage.local.get(
-    ["apiKey", "style", "mode", "model", "autoAnalyse", SPEND_KEY],
+    ["apiKey", "style", "mode", "model", "autoAnalyse", SPEND_KEY, LEXICON_KEY],
     (stored) => {
       if (stored.apiKey) apiKeyInput.value = stored.apiKey;
       modeSelect.value = MODES.includes(stored.mode) ? stored.mode : DEFAULT_MODE;
@@ -97,6 +132,7 @@ function loadSaved() {
       autoAnalyseInput.checked = stored.autoAnalyse !== false;
       updateModeHint();
       renderBudget(typeof stored[SPEND_KEY] === "number" ? stored[SPEND_KEY] : 0);
+      renderLexicon(stored[LEXICON_KEY]);
     }
   );
 }
@@ -119,6 +155,18 @@ resetBudgetButton.addEventListener("click", () => {
     renderBudget(0);
     flash("Spend counter reset");
   });
+});
+
+clearLexiconButton.addEventListener("click", () => {
+  chrome.storage.local.set({ [LEXICON_KEY]: [] }, () => {
+    renderLexicon([]);
+    flash("Lexicon cleared");
+  });
+});
+
+chrome.storage.onChanged.addListener((changes, area) => {
+  if (area !== "local" || !changes[LEXICON_KEY]) return;
+  renderLexicon(changes[LEXICON_KEY].newValue);
 });
 
 loadSaved();
